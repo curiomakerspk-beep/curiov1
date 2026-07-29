@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How We Split index.html — Step by Step Guide</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6fb;
+      color: #222;
+      padding: 40px 20px;
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 50px 60px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    /* Cover */
+    .cover {
+      text-align: center;
+      padding: 60px 0 40px;
+      border-bottom: 3px solid #4f46e5;
+      margin-bottom: 50px;
+    }
+    .cover h1 {
+      font-size: 2.2em;
+      color: #4f46e5;
+      margin-bottom: 12px;
+    }
+    .cover p {
+      font-size: 1.1em;
+      color: #555;
+      margin-top: 10px;
+    }
+    .cover .badge {
+      display: inline-block;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 20px;
+      padding: 6px 18px;
+      font-size: 0.9em;
+      margin-top: 18px;
+    }
+
+    /* Section headings */
+    h2 {
+      font-size: 1.5em;
+      color: #4f46e5;
+      margin: 40px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #e0e7ff;
+    }
+    h3 {
+      font-size: 1.15em;
+      color: #1e1b4b;
+      margin: 24px 0 10px;
+    }
+
+    p { line-height: 1.8; margin-bottom: 12px; color: #333; }
+
+    /* Problem/Solution boxes */
+    .box {
+      border-radius: 8px;
+      padding: 18px 22px;
+      margin: 18px 0;
+      font-size: 0.97em;
+      line-height: 1.75;
+    }
+    .box.problem  { background: #fff1f2; border-left: 5px solid #f43f5e; }
+    .box.solution { background: #f0fdf4; border-left: 5px solid #22c55e; }
+    .box.info     { background: #eff6ff; border-left: 5px solid #3b82f6; }
+    .box.warning  { background: #fffbeb; border-left: 5px solid #f59e0b; }
+    .box strong   { display: block; margin-bottom: 6px; font-size: 1em; }
+
+    /* Code blocks */
+    pre {
+      background: #1e1b4b;
+      color: #c7d2fe;
+      border-radius: 8px;
+      padding: 18px 22px;
+      overflow-x: auto;
+      font-size: 0.88em;
+      line-height: 1.7;
+      margin: 14px 0;
+    }
+    code { font-family: 'Courier New', monospace; }
+    pre code { color: #c7d2fe; }
+
+    /* Step boxes */
+    .step {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+      margin: 28px 0;
+    }
+    .step-num {
+      min-width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 1.3em;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-body h3 { margin-top: 0; }
+
+    /* Before/After comparison */
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 18px 0;
+    }
+    .compare-box {
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .compare-box.before { background: #fff1f2; border: 2px solid #f43f5e; }
+    .compare-box.after  { background: #f0fdf4; border: 2px solid #22c55e; }
+    .compare-box h4 {
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+    .compare-box.before h4 { color: #f43f5e; }
+    .compare-box.after  h4 { color: #22c55e; }
+
+    /* File tree */
+    .tree {
+      background: #1e1b4b;
+      color: #a5b4fc;
+      border-radius: 8px;
+      padding: 20px 24px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      line-height: 2;
+      margin: 14px 0;
+    }
+    .tree .folder { color: #818cf8; }
+    .tree .file   { color: #c7d2fe; }
+    .tree .note   { color: #6ee7b7; }
+    .tree .big    { color: #f87171; }
+    .tree .small  { color: #86efac; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.95em;
+    }
+    th {
+      background: #4f46e5;
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tr:nth-child(even) td { background: #f8f9ff; }
+
+    /* Print */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .page { box-shadow: none; border-radius: 0; padding: 30px 40px; }
+      pre { page-break-inside: avoid; }
+      h2  { page-break-after: avoid; }
+      .step { page-break-inside: avoid; }
+    }
+
+    .print-btn {
+      display: block;
+      width: fit-content;
+      margin: 0 auto 30px;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 30px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    @media print { .print-btn { display: none; } }
+
+    hr { border: none; border-top: 2px solid #e0e7ff; margin: 40px 0; }
+
+    ul { padding-left: 22px; margin: 10px 0 14px; }
+    ul li { line-height: 1.9; color: #333; }
+
+    .highlight { background: #fef9c3; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.92em; }
+  </style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+
+<div class="page">
+
+  <!-- COVER -->
+  <div class="cover">
+    <h1>How We Split index.html</h1>
+    <p>A Step-by-Step Guide to Breaking a 5.7 MB Single File</p>
+    <p>into Clean, Separated, Cacheable Files</p>
+    <div class="badge">Blockly Project — rndmfg</div>
+  </div>
+
+
+  <!-- SECTION 1: THE PROBLEM -->
+  <h2>1. What Was the Problem?</h2>
+
+  <p>
+    Your project had a single file called <span class="highlight">index.html</span> that contained
+    <strong>everything</strong> — HTML layout, CSS styles, JavaScript logic, 3D models, and icons —
+    all packed into one file.
+  </p>
+
+  <div class="box problem">
+    <strong>The Problem:</strong>
+    The file was <strong>5.7 MB</strong> and <strong>19,517 lines</strong> long.
+    A normal HTML file should only be a few hundred lines.
+  </div>
+
+  <h3>What was inside the single file?</h3>
+  <table>
+    <tr><th>Content</th><th>Size</th><th>Should it be in HTML?</th></tr>
+    <tr><td>HTML structure (divs, buttons)</td><td>~82 KB</td><td>Yes</td></tr>
+    <tr><td>CSS styles (inline &lt;style&gt; blocks)</td><td>~179 KB</td><td>No — use a .css file</td></tr>
+    <tr><td>JavaScript logic (inline &lt;script&gt; blocks)</td><td>~505 KB</td><td>No — use .js files</td></tr>
+    <tr><td>3D model: soil_sensor.glb (base64)</td><td>1,072 KB</td><td>No — use a .glb file</td></tr>
+    <tr><td>3D model: bike.glb (base64)</td><td>2,478 KB</td><td>No — use a .glb file</td></tr>
+    <tr><td>58 SVG icons (base64)</td><td>~108 KB</td><td>No — use .svg files</td></tr>
+  </table>
+
+  <h3>Why does this cause trouble?</h3>
+  <ul>
+    <li><strong>Slow to load:</strong> The browser must download all 5.7 MB before showing anything.</li>
+    <li><strong>No caching:</strong> Every page visit re-downloads 5.7 MB, even if nothing changed.</li>
+    <li><strong>Hard to edit:</strong> VSCode slows down opening a 19,000-line file.</li>
+    <li><strong>Memory pressure:</strong> On a Raspberry Pi or tablet, it can crash or lag badly.</li>
+    <li><strong>Bad Git history:</strong> A tiny code change shows a huge diff.</li>
+  </ul>
+
+
+  <hr />
+
+
+  <!-- SECTION 2: THE SOLUTION OVERVIEW -->
+  <h2>2. The Solution — What We Did</h2>
+
+  <p>We split the single file into separate files. The browser still loads the same page — it just fetches the pieces separately now, and can <strong>cache</strong> each piece independently.</p>
+
+  <div class="compare">
+    <div class="compare-box before">
+      <h4>Before</h4>
+      <strong>1 file: index.html (5.7 MB)</strong>
+      All CSS, JS, models, and icons crammed inside one HTML file.
+      Re-downloaded fully every visit.
+    </div>
+    <div class="compare-box after">
+      <h4>After</h4>
+      <strong>7+ files (total same size)</strong>
+      Each file is cached separately. Second visit loads almost instantly.
+    </div>
+  </div>
+
+  <div class="tree">
+    <span class="folder">frontend/assets/blockly/</span><br/>
+    &nbsp;&nbsp;├── <span class="small file">index.html</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">82 KB  ← HTML only (was 5.7 MB)</span><br/>
+    &nbsp;&nbsp;├── <span class="folder">css/</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; └── <span class="small file">main.css</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">179 KB ← all your styles</span><br/>
+    &nbsp;&nbsp;├── <span class="folder">js/</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; ├── <span class="small file">block_01.js</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">16 KB  ← Blockly toolbox config</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; ├── <span class="small file">block_02.js</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">477 KB ← main workspace logic</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; ├── <span class="small file">block_03.js</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">6 KB   ← flyout patch</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; ├── <span class="small file">block_04.js</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">6 KB   ← init code</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; └── <span class="small file">block_05.js</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">6 KB   ← init code</span><br/>
+    &nbsp;&nbsp;├── <span class="folder">assets/</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; ├── <span class="folder">models/</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; │&nbsp;&nbsp; ├── <span class="small file">soil_sensor.glb</span> &nbsp; <span class="note">1,072 KB ← 3D model</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; │&nbsp;&nbsp; └── <span class="small file">bike.glb</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">2,478 KB ← 3D model</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp; └── <span class="folder">img/</span><br/>
+    &nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── <span class="small file">(58 SVG files)</span> &nbsp;&nbsp; <span class="note">108 KB ← icon images</span><br/>
+    &nbsp;&nbsp;└── <span class="note file">index.html.bak</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="note">← original backup (safe!)</span>
+  </div>
+
+
+  <hr />
+
+
+  <!-- SECTION 3: STEP BY STEP -->
+  <h2>3. Step-by-Step Process</h2>
+
+
+  <!-- STEP 1 -->
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Take a Backup First</h3>
+      <p>Before touching anything, we made a copy of the original file. This is the most important step — if anything goes wrong, you can always restore.</p>
+      <pre><code>copy index.html  index.html.bak</code></pre>
+      <div class="box info">
+        <strong>Why?</strong>
+        The original file is your safety net. Never modify a big file without a backup.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- STEP 2 -->
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Extract CSS — Move &lt;style&gt; Blocks to a .css File</h3>
+      <p>
+        Inside your HTML there were 9 separate <span class="highlight">&lt;style&gt;...&lt;/style&gt;</span> blocks.
+        We copied all the content between those tags into a new file <span class="highlight">css/main.css</span>,
+        then deleted those blocks from the HTML.
+      </p>
+
+      <p><strong>Before (inside index.html):</strong></p>
+      <pre><code>&lt;style&gt;
+  body { margin: 0; }
+  .navbar { background: #1e1b4b; }
+  /* ... thousands of lines ... */
+&lt;/style&gt;
+
+&lt;style&gt;
+  /* ... more styles ... */
+&lt;/style&gt;</code></pre>
+
+      <p><strong>After (index.html has just one line):</strong></p>
+      <pre><code>&lt;link rel="stylesheet" href="css/main.css" /&gt;</code></pre>
+
+      <p><strong>New file: css/main.css contains all the style content:</strong></p>
+      <pre><code>body { margin: 0; }
+.navbar { background: #1e1b4b; }
+/* ... all styles combined ... */</code></pre>
+
+      <div class="box solution">
+        <strong>Result:</strong>
+        HTML lost ~179 KB. The browser now downloads main.css once and caches it.
+        Next visit: CSS loads from cache instantly — no download needed.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- STEP 3 -->
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Extract JavaScript — Move &lt;script&gt; Blocks to .js Files</h3>
+      <p>
+        There were 5 large <span class="highlight">&lt;script&gt;...&lt;/script&gt;</span> blocks in the HTML.
+        We saved each one as a numbered JS file, then replaced each block with a single
+        <span class="highlight">&lt;script src="..."&gt;</span> reference.
+      </p>
+
+      <div class="box warning">
+        <strong>Important — Two scripts stayed inline:</strong>
+        The very first script (12 lines) sets up screen height for mobile.
+        It MUST run before anything else loads, so it stays inside the HTML. We only moved
+        the large blocks (&gt;40 lines) to external files.
+      </div>
+
+      <p><strong>Before (inside index.html):</strong></p>
+      <pre><code>&lt;script&gt;
+  window.toolboxConfig = {
+    kind: 'categoryToolbox',
+    contents: [
+      /* ... 343 lines of block config ... */
+    ]
+  };
+&lt;/script&gt;
+
+&lt;script&gt;
+  let workspace = null;
+  /* ... 9,445 lines of main logic ... */
+&lt;/script&gt;</code></pre>
+
+      <p><strong>After (index.html):</strong></p>
+      <pre><code>&lt;script src="js/block_01.js"&gt;&lt;/script&gt;
+&lt;script src="js/block_02.js"&gt;&lt;/script&gt;
+&lt;script src="js/block_03.js"&gt;&lt;/script&gt;
+&lt;script src="js/block_04.js"&gt;&lt;/script&gt;
+&lt;script src="js/block_05.js"&gt;&lt;/script&gt;</code></pre>
+
+      <div class="box solution">
+        <strong>Result:</strong>
+        HTML lost another ~505 KB of script content.
+        Each JS file is cached separately — only changed files need to re-download.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- STEP 4 -->
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <h3>Extract 3D Models — Remove Base64 GLB from JavaScript</h3>
+
+      <p>
+        Two 3D model files (GLB format used by Three.js) were stored as enormous base64 text strings
+        inside the JavaScript. Base64 is a way to encode binary files as text — but it makes the
+        text ~33% larger than the original binary.
+      </p>
+
+      <p><strong>What is base64?</strong></p>
+      <div class="box info">
+        <strong>Base64 explained simply:</strong>
+        Binary files (like images, 3D models) contain bytes that can't be typed as plain text.
+        Base64 converts them to letters and numbers so they can be put inside a text file (like HTML or JS).
+        The downside: the result is 33% larger, and the browser can't cache it separately.
+      </div>
+
+      <p><strong>Before (inside js/block_02.js):</strong></p>
+      <pre><code>const _BIKE_GLB_B64 = "Z2xURgIAAAAQuiYANEABAEpTT0..."; // ← 3.4 MB of text!
+
+// To load it, the code did this:
+const binStr = atob(_BIKE_GLB_B64);           // decode base64 to binary string
+const u8 = new Uint8Array(binStr.length);      // convert to byte array
+for (let i = 0; i &lt; binStr.length; i++)
+    u8[i] = binStr.charCodeAt(i);
+const blobUrl = URL.createObjectURL(          // create a temporary URL
+    new Blob([u8.buffer], {type: 'model/gltf-binary'})
+);
+new THREE.GLTFLoader().load(blobUrl, ...);</code></pre>
+
+      <p><strong>After (js/block_02.js):</strong></p>
+      <pre><code>// The GLB file now lives at assets/models/bike.glb
+// Load it directly — no base64 decode needed:
+const blobUrl = 'assets/models/bike.glb';
+new THREE.GLTFLoader().load(blobUrl, ...);</code></pre>
+
+      <p><strong>The actual GLB files were decoded and saved:</strong></p>
+      <pre><code>assets/models/soil_sensor.glb   ← 1,072 KB binary file
+assets/models/bike.glb          ← 2,478 KB binary file</code></pre>
+
+      <div class="box solution">
+        <strong>Result:</strong>
+        Removed 4,847 KB (4.7 MB!) of base64 text from the JS file.
+        The 3D models load faster because the browser fetches the binary directly — no decode step.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- STEP 5 -->
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <h3>Extract SVG Icons — Remove Base64 Images from CSS and JS</h3>
+
+      <p>
+        58 icon images (SVG format) were embedded as base64 strings inside the CSS and JavaScript.
+        For example, the CSS had background image rules like this:
+      </p>
+
+      <p><strong>Before (inside css/main.css):</strong></p>
+      <pre><code>.icon-digital {
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD...");
+  /* ↑ a very long base64 string for a tiny SVG icon */
+}</code></pre>
+
+      <p><strong>After (css/main.css):</strong></p>
+      <pre><code>.icon-digital {
+  background-image: url(../assets/img/img_001.svg);
+  /* ↑ just a path to the real file */
+}</code></pre>
+
+      <p><strong>The actual SVG files were decoded and saved:</strong></p>
+      <pre><code>assets/img/img_001.svg
+assets/img/img_002.svg
+... (58 files total)</code></pre>
+
+      <div class="box solution">
+        <strong>Result:</strong>
+        CSS shrank from 5,518 KB to 179 KB — because the images are now real files.
+        SVG files are also cached by the browser.
+      </div>
+    </div>
+  </div>
+
+
+  <!-- STEP 6 -->
+  <div class="step">
+    <div class="step-num">6</div>
+    <div class="step-body">
+      <h3>How the Python Script Did This Automatically</h3>
+
+      <p>
+        Doing all of the above by hand on a 19,517-line file would take days.
+        We wrote a Python script (<span class="highlight">split_html.py</span>) that did everything automatically.
+      </p>
+
+      <p>The script worked in 4 passes:</p>
+
+      <pre><code># Pass 1: Read the entire file into memory
+with open("index.html", "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+# Pass 2: Walk through every line using a "state machine"
+#   - When we see &lt;style&gt;, start collecting CSS lines
+#   - When we see &lt;/style&gt;, stop — save collected lines to css/main.css
+#   - When we see &lt;script&gt; (no src=), start collecting JS lines
+#   - When we see &lt;/script&gt;, stop — save to js/block_N.js
+#   - Replace each removed block with a &lt;link&gt; or &lt;script src&gt; reference
+
+# Pass 3: Scan css/main.css for base64 SVG patterns
+#   url("data:image/svg+xml;base64,...") → decode → save as .svg file
+#   Replace the long base64 with: url(../assets/img/img_001.svg)
+
+# Pass 4: Scan js/block_02.js for GLB base64 constants
+#   const _BIKE_GLB_B64 = "huge string..." → decode → save as .glb file
+#   Replace the 5-line atob() decode with: const blobUrl = 'assets/models/bike.glb'
+
+# Write the new slim index.html
+with open("index.html", "w", encoding="utf-8") as f:
+    f.write(new_html)</code></pre>
+
+      <div class="box info">
+        <strong>What is a "state machine"?</strong>
+        A state machine is a program that knows what "state" it is in.
+        In our case, the states were: "reading normal HTML", "inside a &lt;style&gt; block",
+        or "inside a &lt;script&gt; block". This prevented the common bug where &lt;style&gt; text
+        inside a JavaScript comment would be mistakenly treated as real CSS.
+      </div>
+    </div>
+  </div>
+
+
+  <hr />
+
+
+  <!-- SECTION 4: BEFORE/AFTER -->
+  <h2>4. Before vs After — Final Numbers</h2>
+
+  <table>
+    <tr>
+      <th>Metric</th>
+      <th>Before</th>
+      <th>After</th>
+      <th>Improvement</th>
+    </tr>
+    <tr>
+      <td>index.html size</td>
+      <td>5,724 KB (5.7 MB)</td>
+      <td>82 KB</td>
+      <td>98% smaller</td>
+    </tr>
+    <tr>
+      <td>index.html lines</td>
+      <td>19,517 lines</td>
+      <td>1,791 lines</td>
+      <td>91% fewer lines</td>
+    </tr>
+    <tr>
+      <td>Number of files</td>
+      <td>1 file</td>
+      <td>68 files</td>
+      <td>Each file is cacheable</td>
+    </tr>
+    <tr>
+      <td>Second visit download</td>
+      <td>5.7 MB (always)</td>
+      <td>~82 KB (rest cached)</td>
+      <td>98% less data</td>
+    </tr>
+    <tr>
+      <td>IDE performance</td>
+      <td>Slow / laggy</td>
+      <td>Fast</td>
+      <td>Much easier to edit</td>
+    </tr>
+    <tr>
+      <td>Base64 blobs in HTML</td>
+      <td>65</td>
+      <td>0</td>
+      <td>All removed</td>
+    </tr>
+  </table>
+
+
+  <hr />
+
+
+  <!-- SECTION 5: HOW BROWSER LOADING WORKS NOW -->
+  <h2>5. How the Browser Loads the Page Now</h2>
+
+  <p>When a user opens your page, the browser does this:</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <p>Downloads <span class="highlight">index.html</span> (82 KB) — very fast. Starts showing the page structure.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <p>Sees <span class="highlight">&lt;link href="css/main.css"&gt;</span> — downloads the CSS (179 KB). Applies styles.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <p>Sees the 5 <span class="highlight">&lt;script src="js/block_NN.js"&gt;</span> tags — downloads each JS file. Runs them in order.</p>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <p>When the 3D model viewer opens, downloads <span class="highlight">assets/models/bike.glb</span> or <span class="highlight">soil_sensor.glb</span> on demand — only when needed.</p>
+    </div>
+  </div>
+
+  <div class="box solution">
+    <strong>On second visit:</strong>
+    The browser checks its cache first. CSS, JS files, GLB models, and SVG icons are all
+    served from local cache — near-instant load. Only index.html (82 KB) is re-checked for updates.
+  </div>
+
+
+  <hr />
+
+
+  <!-- SECTION 6: KEY CONCEPTS -->
+  <h2>6. Key Concepts Explained Simply</h2>
+
+  <h3>What is Base64?</h3>
+  <p>
+    Binary files (images, 3D models) are made of bytes — raw data that can include any value 0-255.
+    HTML and CSS are text files that can only safely contain printable characters.
+    Base64 converts binary data to only 64 safe characters (A-Z, a-z, 0-9, +, /).
+    This lets you paste a binary file directly inside a text file.
+    The cost: the result is 33% larger than the original.
+  </p>
+
+  <h3>What is Browser Caching?</h3>
+  <p>
+    When you visit a website, the browser saves (caches) files like CSS, JS, and images on your device.
+    The next time you visit, the browser uses the saved copies instead of downloading again.
+    This only works for separate files — inline content inside HTML is never cached separately.
+  </p>
+
+  <h3>What is a State Machine?</h3>
+  <p>
+    A state machine is a program that can be in one of several "states" and changes state when
+    it sees certain triggers. Our parser had 3 states: Normal, InStyle, InScript. When the parser
+    was in "InScript" state, it ignored any &lt;style&gt; text it saw — preventing it from being
+    accidentally treated as CSS.
+  </p>
+
+  <h3>What is GLB / GLTF?</h3>
+  <p>
+    GLTF (GL Transmission Format) is a standard file format for 3D models, created by Khronos Group.
+    GLB is the binary version of GLTF — a single file containing the 3D geometry, materials, and
+    animations. It is used by Three.js (the 3D library in your project) to display 3D objects in a browser.
+  </p>
+
+
+  <hr />
+
+
+  <!-- SECTION 7: RESTORING -->
+  <h2>7. How to Restore the Original (If Needed)</h2>
+
+  <p>If something does not work, you can always go back to the original single file:</p>
+
+  <pre><code># In Windows Explorer or terminal:
+copy index.html.bak  index.html
+
+# Or in terminal:
+cp index.html.bak index.html</code></pre>
+
+  <div class="box warning">
+    <strong>Note:</strong>
+    The backup file <span class="highlight">index.html.bak</span> is the complete original.
+    It is located in the same folder as index.html. Do not delete it.
+  </div>
+
+
+  <hr />
+
+
+  <!-- FOOTER -->
+  <div style="text-align:center; color:#888; font-size:0.88em; margin-top:40px; padding-top:20px; border-top:1px solid #e5e7eb;">
+    Generated for the rndmfg Blockly Project &nbsp;|&nbsp; Date: June 2026<br/>
+    Original file: index.html (5.7 MB) &rarr; Split into 68 separate cacheable files
+  </div>
+
+</div>
+
+</body>
+</html>

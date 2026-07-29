@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Curio Labs — Community</title>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="offline_libs/font-awesome/css/brands.min.css" />
+  <link rel="stylesheet" href="offline_libs/font-awesome/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/community.css" />
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <!-- LEFT -->
+      <div class="topbar-left">
+        <!-- 1. CURIO LABS logo -->
+        <div class="topbar-logo-wrap">
+          <div class="topbar-logo" onclick="window.location.href='index.html'" style="cursor:pointer">CURIO LABS</div>
+          <span style="color:#fff; font-size:14px; font-weight:500; margin-left: 10px;">Community</span>
+        </div>
+      </div><!-- /topbar-left -->
+
+      <!-- RIGHT -->
+      <div class="topbar-right">
+        <!-- Nav buttons -->
+        <button class="nav-btn active" title="Community"><img src="./icons/community.svg" alt="Community" />Community</button>
+        <button class="nav-btn" title="User Guide"><img src="./icons/user_guide.svg" alt="User Guide" />User Guide</button>
+        <button class="nav-btn" title="Example Programs"><img src="./icons/Example_program.svg" alt="Example Programs" />Example Programs</button>
+        <button class="nav-btn" title="Help"><img src="./icons/help.svg" alt="Help" /> Help</button>
+        <button class="nav-btn" id="setting" title="Settings"><img src="./icons/setting.svg" alt="Settings" />Settings</button>
+
+        <!-- Avatar -->
+        <div class="topbar-avatar" title="Profile">
+          <img src="./assets/img/ben10.jpeg" alt="Avatar">
+        </div>
+      </div><!-- /topbar-right -->
+    </div><!-- /topbar -->
+
+    <section class="community-main">
+      <div class="community-container">
+        
+        <!-- Top Section: Search & New Post -->
+        <div class="community-header">
+          <div class="search-bar">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" placeholder="Search discussions..." />
+          </div>
+          <div class="header-actions">
+            <div class="dropdown-latest">
+              <span>Latest</span>
+              <i class="fa-solid fa-chevron-down"></i>
+            </div>
+            <button class="btn-primary new-post-btn">
+              <i class="fa-solid fa-plus"></i> New Post
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="community-filters">
+          <button class="filter-btn active">All</button>
+          <button class="filter-btn">Questions</button>
+          <button class="filter-btn">Announcements</button>
+          <button class="filter-btn">Ideas</button>
+          <button class="filter-btn">Showcase</button>
+          <button class="filter-btn">Help</button>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="community-content-grid">
+          
+          <!-- Left Column: Posts Feed -->
+          <div class="community-feed">
+            
+            <!-- New Post Form (Visible based on mockup 1) -->
+            <div class="post-card new-post-form">
+              <div class="post-header">
+                <div class="avatar-circle">JD</div>
+                <div class="user-info">
+                  <div class="user-name">Jane Doe</div>
+                  <div class="user-role">Member</div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>POST TITLE</label>
+                <input type="text" placeholder="Enter your title here..." />
+              </div>
+              <div class="form-group">
+                <label>DESCRIPTION OR CONTENT</label>
+                <textarea placeholder="Write your post content here..."></textarea>
+              </div>
+              <div class="form-actions">
+                <button class="btn-outline">Discard</button>
+                <button class="btn-primary publish-btn">Publish Post</button>
+              </div>
+            </div>
+
+            <!-- Existing Post Example 1 -->
+            <div class="post-card">
+              <div class="post-header">
+                <div class="avatar-circle">JD</div>
+                <div class="user-info">
+                  <div class="user-name">Jane Doe</div>
+                  <div class="user-role">Member</div>
+                </div>
+                <div class="post-meta">
+                  <span class="time-ago">2 hours ago</span>
+                  <button class="btn-icon"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+              </div>
+              <h3 class="post-title">How do I connect to external APIs in Curio?</h3>
+              <p class="post-content">
+                I'm trying to make HTTP requests from my Curio program but getting errors. I've tried using the fetch module but it seems like the context is not supported. Does anyone have a working example?
+              </p>
+              <div class="post-tags">
+                <span class="tag">#help</span>
+                <span class="tag">#api</span>
+                <span class="tag">#beginner</span>
+              </div>
+              <div class="post-footer">
+                <div class="post-stats">
+                  <button class="btn-icon upvote"><i class="fa-solid fa-arrow-up"></i> 24</button>
+                  <button class="btn-icon downvote"><i class="fa-solid fa-arrow-down"></i></button>
+                  <button class="btn-icon comments"><i class="fa-regular fa-comment"></i> 8</button>
+                </div>
+                <div class="post-actions">
+                  <button class="btn-icon"><i class="fa-solid fa-share-nodes"></i></button>
+                  <button class="btn-icon"><i class="fa-regular fa-bookmark"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Existing Post Example 2 -->
+            <div class="post-card highlight">
+              <div class="post-header">
+                <div class="avatar-circle mod-bg">CT</div>
+                <div class="user-info">
+                  <div class="user-name">Curio Team</div>
+                  <div class="user-role mod-role">Moderator</div>
+                </div>
+                <div class="post-meta">
+                  <span class="time-ago">1 day ago</span>
+                  <button class="btn-icon"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+              </div>
+              <h3 class="post-title">Announcing Curio Labs v2.5 – New Simulation Engine</h3>
+              <p class="post-content">
+                We're excited to announce the release of v2.5 featuring our completely rewritten physics simulation engine with 10x performance improvements and new collision detection algorithms.
+              </p>
+              <div class="post-tags">
+                <span class="tag">#announcement</span>
+                <span class="tag">#release</span>
+              </div>
+              <div class="post-footer">
+                <div class="post-stats">
+                  <button class="btn-icon upvote active"><i class="fa-solid fa-arrow-up"></i> 156</button>
+                  <button class="btn-icon downvote"><i class="fa-solid fa-arrow-down"></i></button>
+                  <button class="btn-icon comments"><i class="fa-regular fa-comment"></i> 42</button>
+                </div>
+                <div class="post-actions">
+                  <button class="btn-icon"><i class="fa-solid fa-share-nodes"></i></button>
+                  <button class="btn-icon"><i class="fa-regular fa-bookmark"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Existing Post Example 3 -->
+            <div class="post-card">
+              <div class="post-header">
+                <div class="avatar-circle green-bg">MS</div>
+                <div class="user-info">
+                  <div class="user-name">Mike Smith</div>
+                  <div class="user-role">Member</div>
+                </div>
+                <div class="post-meta">
+                  <span class="time-ago">3 days ago</span>
+                  <button class="btn-icon"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+              </div>
+              <h3 class="post-title">Showcase: Built a real-time particle system</h3>
+              <p class="post-content">
+                After weeks of work, I finally finished my particle system simulation. It supports up to 10,000 particles with custom physics and GPU acceleration.
+              </p>
+              <div class="post-tags">
+                <span class="tag">#showcase</span>
+                <span class="tag">#physics</span>
+                <span class="tag">#particles</span>
+              </div>
+              <div class="post-footer">
+                <div class="post-stats">
+                  <button class="btn-icon upvote"><i class="fa-solid fa-arrow-up"></i> 89</button>
+                  <button class="btn-icon downvote"><i class="fa-solid fa-arrow-down"></i></button>
+                  <button class="btn-icon comments"><i class="fa-regular fa-comment"></i> 31</button>
+                </div>
+                <div class="post-actions">
+                  <button class="btn-icon"><i class="fa-solid fa-share-nodes"></i></button>
+                  <button class="btn-icon"><i class="fa-regular fa-bookmark"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Existing Post Example 4 -->
+            <div class="post-card">
+              <div class="post-header">
+                <div class="avatar-circle purple-bg">SR</div>
+                <div class="user-info">
+                  <div class="user-name">Sarah R.</div>
+                  <div class="user-role">Member</div>
+                </div>
+                <div class="post-meta">
+                  <span class="time-ago">5 days ago</span>
+                  <button class="btn-icon"><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+              </div>
+              <h3 class="post-title">Best practices for large-scale simulations?</h3>
+              <p class="post-content">
+                What are the recommended approaches for optimizing performance when running simulations with thousands of interacting objects? I'm hitting a bottleneck with my current setup.
+              </p>
+              <div class="post-tags">
+                <span class="tag">#performance</span>
+                <span class="tag">#best-practices</span>
+              </div>
+              <div class="post-footer">
+                <div class="post-stats">
+                  <button class="btn-icon upvote"><i class="fa-solid fa-arrow-up"></i> 45</button>
+                  <button class="btn-icon downvote"><i class="fa-solid fa-arrow-down"></i></button>
+                  <button class="btn-icon comments"><i class="fa-regular fa-comment"></i> 15</button>
+                </div>
+                <div class="post-actions">
+                  <button class="btn-icon"><i class="fa-solid fa-share-nodes"></i></button>
+                  <button class="btn-icon"><i class="fa-regular fa-bookmark"></i></button>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /community-feed -->
+
+          <!-- Right Column: Sidebar Widgets -->
+          <div class="community-sidebar">
+            
+            <!-- Widget 1: Stats -->
+            <div class="widget-card">
+              <h4 class="widget-title">Community Stats</h4>
+              <ul class="stats-list">
+                <li>
+                  <span><i class="fa-solid fa-user-group"></i> Members</span>
+                  <strong>1,234</strong>
+                </li>
+                <li>
+                  <span><i class="fa-regular fa-file-lines"></i> Posts</span>
+                  <strong>567</strong>
+                </li>
+                <li>
+                  <span><i class="fa-solid fa-arrow-trend-up"></i> Active Today</span>
+                  <strong>89</strong>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Widget 2: Top Contributors -->
+            <div class="widget-card">
+              <h4 class="widget-title">Top Contributors</h4>
+              <ul class="contributors-list">
+                <li>
+                  <div class="avatar-circle small">JD</div>
+                  <div class="contributor-info">
+                    <div class="contributor-name">Jane Doe</div>
+                    <div class="contributor-stats">12 posts</div>
+                  </div>
+                </li>
+                <li>
+                  <div class="avatar-circle small orange-bg">MS</div>
+                  <div class="contributor-info">
+                    <div class="contributor-name">Mike Smith</div>
+                    <div class="contributor-stats">8 posts</div>
+                  </div>
+                </li>
+                <li>
+                  <div class="avatar-circle small purple-bg">SR</div>
+                  <div class="contributor-info">
+                    <div class="contributor-name">Sarah R.</div>
+                    <div class="contributor-stats">5 posts</div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Widget 3: Popular Tags -->
+            <div class="widget-card">
+              <h4 class="widget-title">Popular Tags</h4>
+              <div class="tags-cloud">
+                <span class="tag">#python</span>
+                <span class="tag">#help</span>
+                <span class="tag">#showcase</span>
+                <span class="tag">#api</span>
+                <span class="tag">#tutorial</span>
+                <span class="tag">#physics</span>
+              </div>
+            </div>
+
+            <!-- Widget 4: Guidelines -->
+            <div class="widget-card">
+              <h4 class="widget-title">Community Guidelines</h4>
+              <p class="guidelines-text">
+                Be respectful, keep it professional, and always provide context when asking questions. Read our full guidelines to ensure a positive experience for everyone.
+              </p>
+              <a href="#" class="read-more-link">Read more</a>
+            </div>
+
+          </div><!-- /community-sidebar -->
+          
+        </div><!-- /community-content-grid -->
+      </div>
+    </section>
+  </div>
+
+  <!-- //setting slide bar -->
+  <div class="setting-slide" id="slide-setting">
+    <div class="setting-head">
+      <div class="setting-title">
+        <img src="./icons/setting_inner.svg" alt="setting_icon">
+        <p>Settings</p>
+      </div>
+      <img src="./icons/close.svg" alt="close_icon" id="close">
+    </div>
+
+    <div class="setting-body">
+      <div class="setting-element">
+        <div class=setting-element-img>
+          <img src="./icons/dark_mode.svg" alt="darkmode">
+          <p>Dark Mode</p>
+        </div>
+        <div class="checkbox-wrapper-34">
+          <input class='tgl tgl-ios' id='toggle-35' type='checkbox'>
+          <label class='tgl-btn' for='toggle-35'></label>
+        </div>
+      </div>
+      <div class="setting-element">
+        <div class=setting-element-img>
+          <img src="./icons/full_screen.svg" alt="full_screen">
+          <p>Full Screen</p>
+        </div>
+        <div class="checkbox-wrapper-34">
+          <input class='tgl tgl-ios' id='toggle-36' type='checkbox'>
+          <label class='tgl-btn' for='toggle-36'></label>
+        </div>
+      </div>
+      <div class="setting-element">
+        <div class=setting-element-img>
+          <img src="./icons/turbo_mode.svg" alt="turbo_mode">
+          <p>Stage Turbo Mode</p>
+        </div>
+        <div class="checkbox-wrapper-34">
+          <input class='tgl tgl-ios' id='toggle-37' type='checkbox'>
+          <label class='tgl-btn' for='toggle-37'></label>
+        </div>
+      </div>
+      <div class="setting-element">
+        <div class=setting-element-img>
+          <img src="./icons/hide.svg" alt="hide">
+          <p>Hide Stage</p>
+        </div>
+        <div class="checkbox-wrapper-34">
+          <input class='tgl tgl-ios' id='toggle-38' type='checkbox'>
+          <label class='tgl-btn' for='toggle-38'></label>
+        </div>
+      </div>
+      <div class="setting-element">
+        <div class=setting-element-img>
+          <img src="./icons/workspace_grid.svg" alt="workspace_grid">
+          <p>Workspace grid snap</p>
+        </div>
+        <div class="checkbox-wrapper-34">
+          <input class='tgl tgl-ios' id='toggle-39' type='checkbox'>
+          <label class='tgl-btn' for='toggle-39'></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // -------------setting slide-------------
+      const setting = document.getElementById("setting");
+      const slide = document.getElementById("slide-setting");
+      const close = document.getElementById("close");
+      
+      const backdrop = document.createElement('div');
+      backdrop.id = 'setting-backdrop';
+      backdrop.style.position = 'fixed';
+      backdrop.style.top = '0';
+      backdrop.style.left = '0';
+      backdrop.style.width = '100vw';
+      backdrop.style.height = '100vh';
+      backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0)';
+      backdrop.style.zIndex = '99998'; 
+      backdrop.style.display = 'none';
+      backdrop.style.pointerEvents = 'none';
+      document.body.appendChild(backdrop);
+    
+      function openSettings() {
+        slide.style.right = "0";
+        backdrop.style.display = 'block';
+        backdrop.style.pointerEvents = 'auto';
+      }
+    
+      function closeSettings() {
+        slide.style.right = "-400px";
+        backdrop.style.display = 'none';
+        backdrop.style.pointerEvents = 'none';
+      }
+    
+      if (setting) setting.addEventListener("click", openSettings);
+      if (close) close.addEventListener("click", closeSettings);
+      backdrop.addEventListener("click", closeSettings);
+    
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeSettings();
+      });
+    });
+  </script>
+</body>
+</html>

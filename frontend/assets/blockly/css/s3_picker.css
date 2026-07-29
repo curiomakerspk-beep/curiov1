@@ -1,0 +1,312 @@
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fff;
+            padding: clamp(6px, 1.6vmin, 12px) clamp(10px, 2.6vmin, 20px);
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+            flex-shrink: 0;
+        }
+
+        .back-btn {
+            padding: clamp(4px, 1.2vmin, 8px) clamp(8px, 2vmin, 14px);
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: clamp(10px, 2vmin, 13px);
+            font-weight: 600;
+            color: #475569;
+            white-space: nowrap;
+        }
+
+        .back-btn:hover {
+            background: #e2e8f0;
+        }
+
+        .header h1 {
+            font-size: clamp(13px, 2.6vmin, 18px);
+            font-weight: 700;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+
+        .header-badge {
+            font-size: clamp(9px, 1.8vmin, 11px);
+            font-weight: 700;
+            background: linear-gradient(135deg, #7c3aed, #06b6d4);
+            color: #fff;
+            padding: 3px 10px;
+            border-radius: 10px;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+
+        /* ── Main content ── */
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(8px, 3vmin, 32px) clamp(6px, 3vmin, 20px);
+            gap: clamp(10px, 3vmin, 32px);
+            overflow-y: auto;
+            min-height: 0;
+            width: 100%;
+        }
+
+        .heading {
+            text-align: center;
+        }
+
+        .heading h2 {
+            font-size: clamp(15px, 3.4vmin, 24px);
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: clamp(2px, 1vmin, 8px);
+        }
+
+        .heading p {
+            font-size: clamp(10px, 2vmin, 14px);
+            color: #64748b;
+            max-width: 400px;
+            line-height: 1.3;
+        }
+
+        /* ── Card grid ── */
+        .cards {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: clamp(4px, 1.6vmin, 24px);
+            justify-content: center;
+            width: 100%;
+        }
+
+        .card {
+            flex: 1 1 0;
+            width: 0;
+            max-width: 240px;
+            min-width: 0;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            background: #fff;
+            border: 2px solid #e2e8f0;
+            border-radius: clamp(8px, 2vmin, 20px);
+            padding: clamp(8px, 3vmin, 32px) clamp(4px, 2vmin, 24px);
+            text-align: center;
+            cursor: pointer;
+            transition: all .2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity .2s;
+            border-radius: 18px;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, .12);
+        }
+
+        .card:active {
+            transform: translateY(-1px);
+        }
+
+        /* Image card */
+        .card-image {
+            border-color: #f54254;
+        }
+
+        .card-image::before {
+            background: linear-gradient(135deg, #fff1f2, #fff);
+        }
+
+        .card-image:hover {
+            border-color: #f54254;
+        }
+
+        /* Voice card */
+        .card-voice {
+            border-color: #7c3aed;
+        }
+
+        .card-voice::before {
+            background: linear-gradient(135deg, #f5f3ff, #fff);
+        }
+
+        .card-voice:hover {
+            border-color: #7c3aed;
+        }
+
+        .card-icon {
+            font-size: clamp(20px, 8vmin, 56px);
+            margin-bottom: clamp(2px, 2vmin, 16px);
+            display: block;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-title {
+            font-size: clamp(9px, 3vmin, 18px);
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: clamp(2px, 1.5vmin, 8px);
+            position: relative;
+            z-index: 1;
+            line-height: 1.15;
+        }
+
+        .card-desc {
+            font-size: clamp(7px, 2vmin, 12px);
+            color: #64748b;
+            line-height: 1.35;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-badge {
+            display: inline-block;
+            align-self: center;
+            margin-top: auto;
+            padding: clamp(2px, 0.8vmin, 4px) clamp(4px, 1.8vmin, 12px);
+            border-radius: 20px;
+            font-size: clamp(6px, 1.6vmin, 11px);
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+            white-space: nowrap;
+        }
+
+        .card-image .card-badge {
+            background: #fff1f2;
+            color: #f54254;
+            border: 1px solid #fecdd3;
+        }
+
+        .card-voice .card-badge {
+            background: #f5f3ff;
+            color: #7c3aed;
+            border: 1px solid #ddd6fe;
+        }
+
+        .card-arrow {
+            margin-top: clamp(4px, 2.4vmin, 20px);
+            font-size: clamp(12px, 3vmin, 22px);
+            position: relative;
+            z-index: 1;
+            transition: transform .2s;
+        }
+
+        .card:hover .card-arrow {
+            transform: translateX(4px);
+        }
+
+        /* ── Feature list ── */
+        .card-features {
+            margin-top: clamp(4px, 1.8vmin, 14px);
+            text-align: left;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-feature {
+            display: flex;
+            align-items: flex-start;
+            gap: clamp(2px, 0.8vmin, 6px);
+            font-size: clamp(6px, 1.5vmin, 11px);
+            color: #64748b;
+            margin-bottom: clamp(2px, 0.7vmin, 5px);
+            line-height: 1.2;
+            text-align: left;
+        }
+
+        .card-feature::before {
+            content: '✓';
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .card-image .card-feature::before {
+            color: #f54254;
+        }
+
+        .card-voice .card-feature::before {
+            color: #7c3aed;
+        }
+
+        /* ── Bottom hint ── */
+        .hint {
+            font-size: clamp(9px, 1.8vmin, 12px);
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        /* Animation on load */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card {
+            animation: fadeUp .35s ease both;
+        }
+
+        .card-image {
+            animation-delay: .05s;
+        }
+
+        .card-voice {
+            animation-delay: .15s;
+        }
+
+        /* ── Very small / very short screens (extra safety net) ── */
+        @media screen and (max-width: 340px), screen and (max-height: 380px) {
+            .content {
+                gap: 6px;
+                padding: 6px 4px;
+            }
+            .heading p {
+                display: none;
+            }
+        }
+    

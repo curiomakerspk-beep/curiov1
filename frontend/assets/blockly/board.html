@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curio Labs — Choose Board</title>
+  <link rel="stylesheet" href="css/board.css" />
+</head>
+
+<body>
+
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">← Workspace</button>
+        <h1>Extension <span class="header-badge">🧩 Choose Board</span></h1>
+        <div style="width:80px"></div><!-- spacer -->
+    </div>
+
+    <div class="content">
+        <div class="heading">
+            <h2>Which board are you using?</h2>
+            <p>Pick your board to open its training tools. More boards are on the way.</p>
+        </div>
+
+        <div class="cards">
+
+            <!-- K230 — ready -->
+            <div class="card card-k230" onclick="openK230()">
+                <div class="board-img-wrap">
+                    <img class="board-img" src="img/k230.jpeg" alt="K230 board">
+                </div>
+                <div class="card-title">K230</div>
+                <div class="card-desc">
+                    Vision &amp; voice AI training for the K230 camera module.
+                </div>
+                <span class="card-badge">✅ Ready</span>
+                <div class="card-arrow">→</div>
+            </div>
+
+
+
+            <!-- S3 — ready -->
+            <div class="card card-s3" onclick="openS3()">
+                <div class="board-img-wrap">
+                    <img class="board-img" src="img/s3.jpeg" alt="S3 board">
+                </div>
+                <div class="card-title">S3</div>
+                <div class="card-desc">
+                    Vision &amp; voice AI training for the S3 camera module.
+                </div>
+                <span class="card-badge">✅ Ready</span>
+                <div class="card-arrow">→</div>
+            </div>
+            <!-- STM32 — coming soon -->
+            <div class="card card-stm32 card-disabled" title="STM32 support is coming soon">
+                <div class="board-img-wrap">
+                    <img class="board-img" src="img/stm32.jpeg" alt="STM32 board">
+                </div>
+                <div class="card-title">STM32</div>
+                <div class="card-desc">
+                    Training tools for STM32 boards.
+                </div>
+                <span class="card-badge">🚧 Coming Soon</span>
+            </div>
+        </div>
+
+        <div class="hint">
+            More boards are added regularly — check back soon.
+        </div>
+    </div>
+
+<script>        'use strict';
+
+        function send(type, extra) {
+            const payload = JSON.stringify({ type, ...extra });
+            if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(payload);
+            } else if (window.parent !== window) {
+                window.parent.postMessage(payload, '*');
+                window.opener?.postMessage(payload, '*');
+            } else {
+                // Standalone browser — navigate directly back to the workspace
+                if (type === 'BOARD_SELECTED') window.location.href = 'index.html';
+                if (type === 'CLOSE_BOARD') window.location.href = 'index.html';
+            }
+        }
+
+        function openK230() {
+            // K230 is ready — tag the workspace and return to it. Training is
+            // launched later from the "K230 AI Vision" category's Train button.
+            // (localStorage write is a fallback for standalone-browser mode,
+            // where there's no parent/iframe to postMessage to.)
+            try { localStorage.setItem('blockly_selected_board', 'k230'); } catch (e) { }
+            send('BOARD_SELECTED', { board: 'k230' });
+        }
+
+        function openS3() {
+            // S3 is ready — tag the workspace and return to it. Training is
+            // launched later from the "S3 AI Vision" category's Train button.
+            try { localStorage.setItem('blockly_selected_board', 's3'); } catch (e) { }
+            send('BOARD_SELECTED', { board: 's3' });
+        }
+
+        function goBack() {
+            send('CLOSE_BOARD');
+        }
+    </script>
+<script>        // Fix 100vh on Android Expo WebView — set body height to actual visible height
+        if (window.ReactNativeWebView) {
+            function _fixBodyH() { document.body.style.height = window.innerHeight + 'px'; }
+            _fixBodyH();
+            window.addEventListener('resize', _fixBodyH);
+        }
+    </script>
+</body>
+
+</html>

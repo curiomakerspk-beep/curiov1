@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "5001:8080"
+    environment:
+      - PORT=8080
+    container_name: curio-ai-backend
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8083:8080"
+    environment:
+      - PORT=8080
+    container_name: curio-ai-frontend
+    depends_on:
+      - backend

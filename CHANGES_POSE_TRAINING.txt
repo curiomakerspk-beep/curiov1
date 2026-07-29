@@ -1,0 +1,808 @@
+POSE TRAINING FIXES — CHANGE LOG
+=================================
+This file lists every code change made in this chat session, in the order
+they were applied, with exact BEFORE / AFTER text. If another project has
+a copy of the same pose.html / test_pose.py (or a fork of them), apply
+these same edits in the same order to get the same fixes.
+
+Files touched:
+  1. frontend/assets/blockly/pose.html   (browser pose trainer)
+  2. k230_scripts/test_pose.py           (K230 on-device runtime)
+  3. Your own K230 board script (not part of this repo — same fix as #2,
+     applied manually; see section 3 below)
+
+
+===========================================================================
+FILE 1: frontend/assets/blockly/pose.html
+===========================================================================
+
+--------------------------------------------------------------------------
+CHANGE 1.1 — Class colors repeated after the 9th class
+--------------------------------------------------------------------------
+PROBLEM: CLASS_COLORS only has 9 entries. Class #10 reused class #1's
+color (id 10 -> (10-1)%9 = 0), making them look identical in the Live
+Preview output bars / skeleton overlay.
+
+LOCATION: just after the CLASS_COLORS array declaration (~line 631-664).
+
+BEFORE:
+------------------------------------------------------------------
+const CLASS_COLORS = ['#0ea5e9','#10b981','#f54254','#7c3aed',
+                      '#f59e0b','#ec4899','#8b5cf6','#06b6d4','#84cc16'];
+
+let THRESHOLD = 0.80;
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+const CLASS_COLORS = ['#0ea5e9','#10b981','#f54254','#7c3aed',
+                      '#f59e0b','#ec4899','#8b5cf6','#06b6d4','#84cc16'];
+
+// Colors beyond CLASS_COLORS are generated via golden-angle hue rotation
+// so class 10+ never collides with an earlier class's color.
+function hueToHex(h, s=70, l=50){
+    s/=100; l/=100;
+    const k = n => (n + h/30) % 12;
+    const a = s * Math.min(l, 1-l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n),1)));
+    const toHex = x => Math.round(255*x).toString(16).padStart(2,'0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+function colorForId(id){
+    if(id <= CLASS_COLORS.length) return CLASS_COLORS[id-1];
+    return hueToHex((id * 137.508) % 360);
+}
+
+let THRESHOLD = 0.80;
+------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------
+CHANGE 1.2 — addClass() must use the new color function
+--------------------------------------------------------------------------
+LOCATION: inside addClass() (~line 1380).
+
+BEFORE:
+------------------------------------------------------------------
+    const id = nextClassId++;
+    const cls = {id, name:`Pose${id}`, color:CLASS_COLORS[(id-1)%CLASS_COLORS.length]};
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+    const id = nextClassId++;
+    const cls = {id, name:`Pose${id}`, color:colorForId(id)};
+------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------
+CHANGE 1.3 — updateOutputBars() fallback color must match
+--------------------------------------------------------------------------
+LOCATION: inside updateOutputBars() (~line 1457).
+
+BEFORE:
+------------------------------------------------------------------
+        const color=cls?.color||CLASS_COLORS[i%CLASS_COLORS.length];
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+        const color=cls?.color||colorForId(i+1);
+------------------------------------------------------------------
+
+
+--------------------------------------------------------------------------
+CHANGE 1.4 — Pose features were position-dependent, not shape-dependent
+--------------------------------------------------------------------------
+PROBLEM: keypointsToFeatures() normalized each keypoint by dividing by
+frame width/height only. That means the model partially learned WHERE in
+the frame you stood, not the SHAPE of the pose. As more classes were
+added, this caused confusion between classes captured at slightly
+different distances/positions from the camera.
+
+FIX: center coordinates on the hip midpoint (keypoints 11,12) and scale
+by torso length (shoulder midpoint to hip midpoint distance, keypoints
+5,6 vs 11,12). This makes features translation/scale invariant.
+
+IMPORTANT: this changes the feature format. Any previously trained model
+must be retrained after this change — old dataset samples are still
+valid (they store raw MoveNet keypoints... actually they store the
+already-computed feature vector, see note below), but a model trained
+with the OLD format will not work with NEW-format live inference, and
+vice versa. See CHANGE 1.4-NOTE below.
+
+LOCATION: keypointsToFeatures() function (~line 804-833).
+
+BEFORE:
+------------------------------------------------------------------
+// ──────────────────────────────────────────────────────────────
+// MOVENET FEATURE EXTRACTION
+// Flattens 17 keypoints × (x, y) → Float32Array of length 34
+// ──────────────────────────────────────────────────────────────
+function keypointsToFeatures(keypoints, imgW, imgH){
+    const arr = new Float32Array(NUM_KEYPOINTS * 2);
+    for(let i = 0; i < NUM_KEYPOINTS; i++){
+        const kp = keypoints[i];
+        arr[i*2]   = kp ? kp.x / imgW : 0;
+        arr[i*2+1] = kp ? kp.y / imgH : 0;
+    }
+    return arr;
+}
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+// ──────────────────────────────────────────────────────────────
+// MOVENET FEATURE EXTRACTION
+// Flattens 17 keypoints × (x, y) → Float32Array of length 34.
+// Coordinates are centered on the hip midpoint and scaled by torso
+// length (shoulder-to-hip distance) so the features describe pose
+// *shape* rather than where the person stands in the frame. Without
+// this, classes captured at slightly different distances/positions
+// overlap in feature space and become harder to tell apart as more
+// classes are added.
+// ──────────────────────────────────────────────────────────────
+function keypointsToFeatures(keypoints, imgW, imgH){
+    const arr = new Float32Array(NUM_KEYPOINTS * 2);
+
+    const lHip = keypoints[11], rHip = keypoints[12];
+    const lSh  = keypoints[5],  rSh  = keypoints[6];
+
+    const cx = (lHip && rHip) ? (lHip.x + rHip.x) / 2 : imgW / 2;
+    const cy = (lHip && rHip) ? (lHip.y + rHip.y) / 2 : imgH / 2;
+    const shx = (lSh && rSh) ? (lSh.x + rSh.x) / 2 : cx;
+    const shy = (lSh && rSh) ? (lSh.y + rSh.y) / 2 : cy - imgH * 0.25;
+
+    let scale = Math.hypot(shx - cx, shy - cy);
+    if (!scale || scale < 1e-3) scale = Math.max(imgW, imgH) * 0.25;
+
+    for(let i = 0; i < NUM_KEYPOINTS; i++){
+        const kp = keypoints[i];
+        arr[i*2]   = kp ? (kp.x - cx) / scale : 0;
+        arr[i*2+1] = kp ? (kp.y - cy) / scale : 0;
+    }
+    return arr;
+}
+------------------------------------------------------------------
+
+CHANGE 1.4-NOTE: keypointsToFeatures() is called once at CAPTURE time
+(in captureOneSample) and the resulting feature vector is what gets
+stored in `dataset`. It is also called at PREDICT time (in
+_startPoseInferLoop). Both call sites automatically pick up whichever
+version of this function is loaded on the page, so as long as you
+retrain AFTER this edit (not before), train and predict stay consistent
+with each other. You do not need to touch captureOneSample() or
+_startPoseInferLoop() — they just call keypointsToFeatures() and don't
+care about its internals.
+
+
+--------------------------------------------------------------------------
+CHANGE 1.5 — New feature: "ESP32-S3 Cam" button (view-only camera source)
+--------------------------------------------------------------------------
+GOAL: add a second camera-source button next to "Webcam" in each pose
+class card, that connects to an ESP32-S3 board over WebSerial and shows
+its camera feed live, for visual monitoring only (NOT fed into MoveNet
+— the ESP32-S3 sensor is 96x96 grayscale, too small for reliable pose
+keypoint detection, so training samples still come from the Webcam
+button only).
+
+Protocol reference (from the ESP32-S3 firmware at
+D:\Arun\DFROBO-esp32s3-AI\DFR1154_IMAGE_VOICE_UNIFIED):
+  - Serial port (WebSerial), NOT a USB video/UVC device.
+  - Baud rate: 115200.
+  - No continuous stream exists. Send "CAPTURE\n"; the firmware replies
+    with one JPEG snapshot as base64 text framed as:
+        SERIAL IMAGE_BEGIN <jpeg_len> <b64_len>\n
+        SERIAL IMAGE_CHUNK <up to 120 base64 chars>\n   (repeated)
+        SERIAL IMAGE_END\n
+    or on failure: "SERIAL ERR <message>\n"
+  - "Live" view is faked by polling CAPTURE on a timer (we use 1000ms).
+
+--- 1.5a) CSS: two-button row + view-only note --------------------------
+LOCATION: replaces the old single ".open-cam-btn" CSS block (~line 184).
+
+BEFORE:
+------------------------------------------------------------------
+        /* Open webcam button (idle state) */
+        .open-cam-btn {
+            width: 100%; padding: 11px 0; border-radius: 8px; border: none;
+            background: #1a73e8; color: #fff;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: opacity .15s;
+        }
+        .open-cam-btn:hover { opacity: .88; }
+        .open-cam-btn:disabled { opacity: .35; cursor: not-allowed; }
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+        /* Open webcam / ESP32 buttons row (idle state) */
+        .open-cam-row { display: flex; gap: 8px; }
+        .open-cam-btn {
+            flex: 1; padding: 11px 0; border-radius: 8px; border: none;
+            background: #1a73e8; color: #fff;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: opacity .15s;
+        }
+        .open-cam-btn:hover { opacity: .88; }
+        .open-cam-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+        .esp32-cam-btn {
+            flex: 1; padding: 11px 0; border-radius: 8px; border: none;
+            background: #f59e0b; color: #fff;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: opacity .15s;
+        }
+        .esp32-cam-btn:hover { opacity: .88; }
+        .esp32-cam-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+        .esp32-view-note {
+            font-size: 11px; color: #92400e; background: #fef3c7;
+            border-radius: 6px; padding: 6px 8px; text-align: center;
+        }
+------------------------------------------------------------------
+
+--- 1.5b) New global state variables ------------------------------------
+LOCATION: in the "Camera / capture state" block (~line 674).
+
+BEFORE:
+------------------------------------------------------------------
+// Camera / capture state
+let camStream      = null;
+let camVideoEl     = null;
+let camOpenIdx     = null;
+let camAnimFrame   = null;
+let holdTimer      = null;
+let isCapturing    = false;
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+// Camera / capture state
+let camStream      = null;
+let camVideoEl     = null;
+let camOpenIdx     = null;
+let camAnimFrame   = null;
+let holdTimer      = null;
+let isCapturing    = false;
+let camSourceType  = null;   // 'webcam' | 'esp32' — which source the open cam panel is showing
+
+// ESP32-S3 camera (view-only, via WebSerial CAPTURE snapshot protocol)
+let esp32Port           = null;
+let esp32Reader         = null;
+let esp32Writer         = null;
+let esp32LineBuf         = '';
+let esp32ImageActive    = false;
+let esp32ImageB64       = '';
+let esp32Busy           = false;
+let esp32CaptureTimer   = null;
+let esp32CaptureTimeout = null;
+------------------------------------------------------------------
+
+--- 1.5c) openCamCapture() tags itself as the webcam source, plus all new
+          ESP32 functions added right after it --------------------------
+LOCATION: end of openCamCapture() (~line 943), followed immediately by
+a whole new block of ESP32 functions inserted before animateCamCanvas().
+
+BEFORE:
+------------------------------------------------------------------
+        camOpenIdx = classIdx;
+        window._lastLivePose = null;
+        render();
+        animateCamCanvas(classIdx);
+        startPoseLoop();
+        setStatus('📷 Camera open — hold the button to capture samples.');
+    }catch(e){alert('Camera error: '+e.message);console.error(e);}
+}
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+        camOpenIdx = classIdx;
+        camSourceType = 'webcam';
+        window._lastLivePose = null;
+        render();
+        animateCamCanvas(classIdx);
+        startPoseLoop();
+        setStatus('📷 Camera open — hold the button to capture samples.');
+    }catch(e){alert('Camera error: '+e.message);console.error(e);}
+}
+
+// ──────────────────────────────────────────────────────────────
+// ESP32-S3 CAMERA (view-only, over WebSerial)
+// Firmware has no continuous video stream — it replies to a
+// "CAPTURE\n" command with one base64 JPEG snapshot framed as:
+//   SERIAL IMAGE_BEGIN <len> <b64len>\n
+//   SERIAL IMAGE_CHUNK <b64 chars>\n   (repeated)
+//   SERIAL IMAGE_END\n
+// so "live" view is simulated by polling CAPTURE on a timer.
+// Frames are shown for visual confirmation only — they are NOT fed
+// into MoveNet, since the 96×96 grayscale sensor is far too small
+// for reliable body-keypoint detection. Training samples still come
+// from the regular Webcam button.
+// ──────────────────────────────────────────────────────────────
+async function openEsp32CamCapture(classIdx){
+    if(!('serial' in navigator)){alert('ESP32-S3 USB camera requires Chrome / Edge v89+ on desktop.');return;}
+    if(camOpenIdx !== null) stopCamCapture();
+
+    try{
+        if(!esp32Port){
+            esp32Port = await navigator.serial.requestPort();
+            await esp32Port.open({baudRate:115200});
+            esp32Writer = esp32Port.writable.getWriter();
+            esp32ReaderLoop();
+        }
+
+        camOpenIdx = classIdx;
+        camSourceType = 'esp32';
+        render();
+        setStatus('🔌 ESP32-S3 camera connected — live view only (samples still captured via Webcam).');
+
+        esp32RequestFrame();
+        esp32CaptureTimer = setInterval(esp32RequestFrame, 1000);
+    }catch(e){
+        alert('ESP32-S3 connect error: '+e.message);
+        console.error(e);
+        await esp32Disconnect();
+    }
+}
+
+function esp32RequestFrame(){
+    if(camSourceType !== 'esp32' || esp32Busy || !esp32Writer) return;
+    esp32Busy = true;
+    if(esp32CaptureTimeout) clearTimeout(esp32CaptureTimeout);
+    esp32CaptureTimeout = setTimeout(()=>{
+        esp32Busy = false; esp32ImageActive = false;
+        setStatus('ESP32-S3: capture timed out, retrying...');
+    }, 5000);
+    esp32Writer.write(new TextEncoder().encode('CAPTURE\n')).catch(e=>{
+        esp32Busy = false;
+        setStatus('ESP32-S3 write error: '+e.message);
+    });
+}
+
+async function esp32ReaderLoop(){
+    const decoder = new TextDecoder();
+    try{
+        while(esp32Port){
+            esp32Reader = esp32Port.readable.getReader();
+            try{
+                while(true){
+                    const {value,done} = await esp32Reader.read();
+                    if(done) break;
+                    if(value) esp32HandleText(decoder.decode(value,{stream:true}));
+                }
+            }finally{ esp32Reader.releaseLock(); }
+        }
+    }catch(e){
+        if(esp32Port) console.error('ESP32-S3 serial read error:',e);
+    }
+}
+
+function esp32HandleText(text){
+    esp32LineBuf += text.replace(/\r/g,'');
+    let idx;
+    while((idx = esp32LineBuf.indexOf('\n')) >= 0){
+        const line = esp32LineBuf.slice(0,idx);
+        esp32LineBuf = esp32LineBuf.slice(idx+1);
+        esp32ProcessLine(line);
+    }
+}
+
+function esp32ProcessLine(line){
+    if(line.startsWith('SERIAL IMAGE_BEGIN')){
+        esp32ImageActive = true; esp32ImageB64 = '';
+        return;
+    }
+    if(line.startsWith('SERIAL IMAGE_CHUNK ')){
+        if(esp32ImageActive) esp32ImageB64 += line.slice('SERIAL IMAGE_CHUNK '.length).trim();
+        return;
+    }
+    if(line.startsWith('SERIAL IMAGE_END')){
+        if(esp32ImageActive && esp32ImageB64) esp32RenderFrame(esp32ImageB64);
+        esp32ImageActive = false; esp32ImageB64 = ''; esp32Busy = false;
+        if(esp32CaptureTimeout){clearTimeout(esp32CaptureTimeout); esp32CaptureTimeout=null;}
+        return;
+    }
+    if(line.startsWith('SERIAL ERR')){
+        esp32ImageActive = false; esp32ImageB64 = ''; esp32Busy = false;
+        if(esp32CaptureTimeout){clearTimeout(esp32CaptureTimeout); esp32CaptureTimeout=null;}
+        setStatus('ESP32-S3: '+line.replace(/^SERIAL ERR\s*/,''));
+    }
+}
+
+function esp32RenderFrame(b64){
+    if(camSourceType !== 'esp32' || camOpenIdx === null) return;
+    const canvas = document.getElementById(`cam-canvas-${camOpenIdx}`);
+    if(!canvas) return;
+    const img = new Image();
+    img.onload = ()=>{
+        if(camSourceType !== 'esp32' || camOpenIdx === null) return;
+        const liveCanvas = document.getElementById(`cam-canvas-${camOpenIdx}`);
+        if(!liveCanvas) return;
+        const ctx = liveCanvas.getContext('2d');
+        ctx.clearRect(0,0,liveCanvas.width,liveCanvas.height);
+        ctx.drawImage(img,0,0,liveCanvas.width,liveCanvas.height);
+    };
+    img.onerror = ()=>setStatus('ESP32-S3: failed to decode frame.');
+    img.src = 'data:image/jpeg;base64,'+b64;
+}
+
+async function esp32Disconnect(){
+    if(esp32CaptureTimer){clearInterval(esp32CaptureTimer); esp32CaptureTimer=null;}
+    if(esp32CaptureTimeout){clearTimeout(esp32CaptureTimeout); esp32CaptureTimeout=null;}
+    esp32Busy=false; esp32ImageActive=false; esp32ImageB64=''; esp32LineBuf='';
+    const p = esp32Port; esp32Port = null;
+    try{esp32Reader && await esp32Reader.cancel();}catch{}
+    try{esp32Reader && esp32Reader.releaseLock();}catch{}
+    try{esp32Writer && await esp32Writer.close();}catch{}
+    try{esp32Writer && esp32Writer.releaseLock();}catch{}
+    try{p && await p.close();}catch{}
+    esp32Reader = esp32Writer = null;
+}
+------------------------------------------------------------------
+
+--- 1.5d) stopCamCapture() must tear down the ESP32 connection too ------
+LOCATION: stopCamCapture() (~line 1134).
+
+BEFORE:
+------------------------------------------------------------------
+function stopCamCapture(){
+    clearInterval(holdTimer); holdTimer=null;
+    if(camAnimFrame){cancelAnimationFrame(camAnimFrame);camAnimFrame=null;}
+    if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+    camVideoEl=null; camOpenIdx=null; isCapturing=false;
+    render();
+    setStatus('Camera stopped.');
+}
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+function stopCamCapture(){
+    clearInterval(holdTimer); holdTimer=null;
+    if(camAnimFrame){cancelAnimationFrame(camAnimFrame);camAnimFrame=null;}
+    if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+    if(camSourceType === 'esp32') esp32Disconnect();
+    camVideoEl=null; camOpenIdx=null; isCapturing=false; camSourceType=null;
+    render();
+    setStatus('Camera stopped.');
+}
+------------------------------------------------------------------
+
+--- 1.5e) renderClasses(): track whether the ESP32 view is open ---------
+LOCATION: inside renderClasses(), right after `isCamOpen` is computed
+(~line 1252).
+
+BEFORE:
+------------------------------------------------------------------
+        const count = classCounts[cls.name]||0;
+        const isCamOpen = camOpenIdx === idx;
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+        const count = classCounts[cls.name]||0;
+        const isCamOpen = camOpenIdx === idx;
+        const isEsp32Open = isCamOpen && camSourceType === 'esp32';
+------------------------------------------------------------------
+
+--- 1.5f) renderClasses(): the cam-panel template gets a 3rd branch -----
+LOCATION: the `cam-panel` template string inside renderClasses()
+(originally had 2 branches: isCamOpen / idle; now has 3: webcam-open /
+esp32-open / idle).
+
+BEFORE:
+------------------------------------------------------------------
+                <div class="cam-panel">
+                    ${isCamOpen ? `
+                    <div class="cam-canvas-box">
+                        <canvas id="cam-canvas-${idx}" width="320" height="240"></canvas>
+                    </div>
+                    <div class="cam-crop-label">
+                        📐 Dashed box = capture area &nbsp;·&nbsp; <b>320×240px</b> crop
+                    </div>
+                    <div class="cam-btn-row">
+                        <button class="hold-btn" style="background:${cls.color}"
+                            onmousedown="startHoldRecord(${idx})" onmouseup="stopHoldRecord()"
+                            onmouseleave="stopHoldRecord()"
+                            ontouchstart="startHoldRecord(${idx})" ontouchend="stopHoldRecord()">
+                            Hold to Capture
+                        </button>
+                        <button class="stop-cam-btn" onclick="stopCamCapture()">Stop</button>
+                    </div>
+                    ` : `
+                    <div class="cam-canvas-box">
+                        <div class="cam-canvas-placeholder">
+                            <div class="ph-icon">📷</div>
+                            <div>Click <b>Webcam</b> to start camera</div>
+                        </div>
+                    </div>
+                    <button class="open-cam-btn"
+                        onclick="openCamCapture(${idx})" ${!moveNet?'disabled':''}>
+                        Webcam
+                    </button>
+                    `}
+                </div>
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+                <div class="cam-panel">
+                    ${isCamOpen ? (isEsp32Open ? `
+                    <div class="cam-canvas-box">
+                        <canvas id="cam-canvas-${idx}" width="320" height="240"></canvas>
+                    </div>
+                    <div class="esp32-view-note">
+                        🔌 ESP32-S3 USB — live view only (96×96). Use <b>Webcam</b> to capture samples.
+                    </div>
+                    <div class="cam-btn-row">
+                        <button class="stop-cam-btn" style="flex:1" onclick="stopCamCapture()">Stop</button>
+                    </div>
+                    ` : `
+                    <div class="cam-canvas-box">
+                        <canvas id="cam-canvas-${idx}" width="320" height="240"></canvas>
+                    </div>
+                    <div class="cam-crop-label">
+                        📐 Dashed box = capture area &nbsp;·&nbsp; <b>320×240px</b> crop
+                    </div>
+                    <div class="cam-btn-row">
+                        <button class="hold-btn" style="background:${cls.color}"
+                            onmousedown="startHoldRecord(${idx})" onmouseup="stopHoldRecord()"
+                            onmouseleave="stopHoldRecord()"
+                            ontouchstart="startHoldRecord(${idx})" ontouchend="stopHoldRecord()">
+                            Hold to Capture
+                        </button>
+                        <button class="stop-cam-btn" onclick="stopCamCapture()">Stop</button>
+                    </div>
+                    `) : `
+                    <div class="cam-canvas-box">
+                        <div class="cam-canvas-placeholder">
+                            <div class="ph-icon">📷</div>
+                            <div>Click <b>Webcam</b> or <b>ESP32-S3 Cam</b> to start camera</div>
+                        </div>
+                    </div>
+                    <div class="open-cam-row">
+                        <button class="open-cam-btn"
+                            onclick="openCamCapture(${idx})" ${!moveNet?'disabled':''}>
+                            Webcam
+                        </button>
+                        <button class="esp32-cam-btn"
+                            onclick="openEsp32CamCapture(${idx})">
+                            🔌 ESP32-S3 Cam
+                        </button>
+                    </div>
+                    `}
+                </div>
+------------------------------------------------------------------
+
+NOTE: resetPage() and goBack() already called stopCamCapture(), so no
+change was needed there — they automatically pick up the ESP32
+teardown for free.
+
+
+--------------------------------------------------------------------------
+CHANGE 1.6 — removeClass() didn't re-index thumbnail storage
+--------------------------------------------------------------------------
+PROBLEM: removeClass() correctly shifts `dataset` sample labels down by
+1 for every class after the removed one (so TRAINING data stays valid),
+but it does NOT do the same shift for `thumbnailStore` /
+`thumbnailDatasetIdx` (the per-class captured-sample THUMBNAIL images
+shown in the UI, and the "which dataset index does this thumbnail
+map to" lookup used by the thumbnail delete (x) button). After removing
+a class, every class card positioned after the removed one shows/deletes
+the WRONG thumbnails.
+NOTE: this is a real bug, but it is UI-only — it does not corrupt
+training data or explain misclassification during Live Preview /
+K230 deployment (those had separate causes, see 1.4 and the K230
+section below).
+
+LOCATION: removeClass() (~line 1388).
+
+BEFORE:
+------------------------------------------------------------------
+function removeClass(idx){
+    if(classes.length<=2){alert('Need at least 2 classes');return;}
+    const cls = classes[idx];
+    for(let i=dataset.length-1;i>=0;i--){if(dataset[i].label===idx)dataset.splice(i,1);}
+    dataset.forEach(s=>{if(s.label>idx)s.label--;});
+    delete classCounts[cls.name];
+    delete thumbnailStore[idx];
+    delete thumbnailDatasetIdx[idx];
+    classes.splice(idx,1);
+    trained=false; updateButtons();
+    render();
+}
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+function removeClass(idx){
+    if(classes.length<=2){alert('Need at least 2 classes');return;}
+    const cls = classes[idx];
+    for(let i=dataset.length-1;i>=0;i--){if(dataset[i].label===idx)dataset.splice(i,1);}
+    dataset.forEach(s=>{if(s.label>idx)s.label--;});
+    delete classCounts[cls.name];
+
+    // Re-key thumbnail stores to stay aligned with the classes array
+    // after splice — mirrors the dataset label shift above. Without
+    // this, every class after the removed one shows/deletes the
+    // wrong thumbnails (and wrong underlying samples).
+    const newThumbnailStore = {};
+    const newThumbnailDatasetIdx = {};
+    Object.keys(thumbnailStore).forEach(k=>{
+        const ci = Number(k);
+        if(ci === idx) return;
+        newThumbnailStore[ci > idx ? ci - 1 : ci] = thumbnailStore[ci];
+    });
+    Object.keys(thumbnailDatasetIdx).forEach(k=>{
+        const ci = Number(k);
+        if(ci === idx) return;
+        newThumbnailDatasetIdx[ci > idx ? ci - 1 : ci] = thumbnailDatasetIdx[ci];
+    });
+    thumbnailStore = newThumbnailStore;
+    thumbnailDatasetIdx = newThumbnailDatasetIdx;
+
+    classes.splice(idx,1);
+    trained=false; updateButtons();
+    render();
+}
+------------------------------------------------------------------
+
+
+===========================================================================
+FILE 2: k230_scripts/test_pose.py
+===========================================================================
+
+--------------------------------------------------------------------------
+CHANGE 2.1 — K230 runtime used the OLD (pre-1.4) feature normalization
+--------------------------------------------------------------------------
+PROBLEM: this is the on-device counterpart of keypointsToFeatures() in
+pose.html. After CHANGE 1.4 switched the browser trainer to hip-centered
+/ torso-scaled features, this file was never updated to match — it was
+still computing raw x/width, y/height features. The exported
+pose_model.kmodel's weights only make sense for the NEW feature format,
+so feeding it OLD-format features on the K230 board produced wrong
+predictions on-device even though the same model worked fine in the
+browser Live Preview.
+
+FIX: port the exact same hip-centering / torso-scale math from
+pose.html's keypointsToFeatures() into Python.
+
+LOCATION: inside main(), where `kps` is processed (~line 143-156).
+
+BEFORE:
+------------------------------------------------------------------
+                # Process the first detected person
+                kps = detected_persons[0] # Shape: [17, 3] -> (x, y, score)
+
+                # Step 2: Normalize coordinates to [0, 1] relative to input crop shape (320x320)
+                features = []
+                for i in range(17):
+                    x, y, score = kps[i]
+                    # Map coordinates back to [0.0, 1.0] domain
+                    norm_x = x / rgb_size[0]
+                    norm_y = y / rgb_size[1]
+                    features.append(norm_x)
+                    features.append(norm_y)
+
+                # Convert to float array and reshape to [1, 34] input tensor
+                features_np = np.array(features, dtype=np.float).reshape((1, 34))
+------------------------------------------------------------------
+
+AFTER:
+------------------------------------------------------------------
+                # Process the first detected person
+                kps = detected_persons[0] # Shape: [17, 3] -> (x, y, score)
+
+                # Step 2: Center on the hip midpoint and scale by torso length
+                # (shoulder-to-hip distance). This MUST match the browser
+                # trainer's keypointsToFeatures() exactly (pose.html) -- it
+                # trains on hip-centered/scale-normalized coordinates, not
+                # raw x/rgb_size[0], y/rgb_size[1]. A mismatch here makes the
+                # classifier's learned weights meaningless on-device even
+                # though the same model predicts correctly in the browser.
+                l_hip_x, l_hip_y, _ = kps[11]
+                r_hip_x, r_hip_y, _ = kps[12]
+                l_sh_x, l_sh_y, _ = kps[5]
+                r_sh_x, r_sh_y, _ = kps[6]
+
+                cx = (l_hip_x + r_hip_x) / 2.0
+                cy = (l_hip_y + r_hip_y) / 2.0
+                shx = (l_sh_x + r_sh_x) / 2.0
+                shy = (l_sh_y + r_sh_y) / 2.0
+
+                scale = ((shx - cx) ** 2 + (shy - cy) ** 2) ** 0.5
+                if scale < 1e-3:
+                    scale = max(rgb_size[0], rgb_size[1]) * 0.25
+
+                features = []
+                for i in range(17):
+                    x, y, score = kps[i]
+                    features.append((x - cx) / scale)
+                    features.append((y - cy) / scale)
+
+                # Convert to float array and reshape to [1, 34] input tensor
+                features_np = np.array(features, dtype=np.float).reshape((1, 34))
+------------------------------------------------------------------
+
+
+===========================================================================
+SECTION 3: Your actual K230 board script (not in this repo)
+===========================================================================
+You mentioned running a more advanced script on the board itself, with
+UART output (YbUart), multi-path model search (YOLO_POSE_PATHS /
+CLASSIFIER_PATHS / LABELS_PATHS), and confidence display scaling. That
+file isn't tracked anywhere in this project, so it couldn't be edited
+directly — apply CHANGE 2.1's exact same fix to it manually:
+
+Find this block in your script:
+------------------------------------------------------------------
+                kps = detected_persons[0]
+
+                features = []
+                for i in range(17):
+                    x, y, score = kps[i]
+                    features.append(x / rgb_size[0])
+                    features.append(y / rgb_size[1])
+
+                features_np = np.array(features, dtype=np.float).reshape((1, 34))
+------------------------------------------------------------------
+
+Replace it with:
+------------------------------------------------------------------
+                kps = detected_persons[0]
+
+                l_hip_x, l_hip_y, _ = kps[11]
+                r_hip_x, r_hip_y, _ = kps[12]
+                l_sh_x, l_sh_y, _ = kps[5]
+                r_sh_x, r_sh_y, _ = kps[6]
+
+                cx = (l_hip_x + r_hip_x) / 2.0
+                cy = (l_hip_y + r_hip_y) / 2.0
+                shx = (l_sh_x + r_sh_x) / 2.0
+                shy = (l_sh_y + r_sh_y) / 2.0
+
+                scale = ((shx - cx) ** 2 + (shy - cy) ** 2) ** 0.5
+                if scale < 1e-3:
+                    scale = max(rgb_size[0], rgb_size[1]) * 0.25
+
+                features = []
+                for i in range(17):
+                    x, y, score = kps[i]
+                    features.append((x - cx) / scale)
+                    features.append((y - cy) / scale)
+
+                features_np = np.array(features, dtype=np.float).reshape((1, 34))
+------------------------------------------------------------------
+
+Everything else in that script (UART init/send, model path search,
+drawing, cleanup) is unchanged.
+
+
+===========================================================================
+APPLYING THIS TO A DIFFERENT / DUPLICATE APP
+===========================================================================
+If you have another copy of pose.html (or a similar image/voice teachable-
+machine style trainer) that has the SAME symptoms, apply changes in this
+order:
+  1. CHANGE 1.1, 1.2, 1.3  — only needed if the app has a fixed-size
+     CLASS_COLORS array reused via modulo.
+  2. CHANGE 1.4  — only relevant if the app trains on raw normalized
+     x/width, y/height keypoints instead of a shape-invariant encoding.
+     If you apply this, you MUST retrain from scratch (old + new format
+     samples cannot be mixed), and update every deployment target's
+     runtime feature extraction to match (see CHANGE 2.1 / Section 3).
+  3. CHANGE 1.5  — only relevant if you also want an ESP32-S3-over-
+     WebSerial camera viewer button; requires the same firmware protocol
+     (CAPTURE / IMAGE_BEGIN / IMAGE_CHUNK / IMAGE_END over 115200 baud).
+  4. CHANGE 1.6  — apply any time the app has a "remove class" feature
+     that shifts dataset labels but has separate per-class UI caches
+     (thumbnails, previews, etc.) keyed by array index — check that ALL
+     such caches get the same index-shift treatment, not just the
+     training dataset.
+  5. CHANGE 2.1 / Section 3 — apply to ANY on-device runtime (K230, ESP32,
+     etc.) that re-implements the SAME feature extraction as the browser
+     trainer. Whenever the browser-side feature function changes, every
+     on-device copy of that logic must be updated identically, or the
+     deployed model will silently receive out-of-distribution input.

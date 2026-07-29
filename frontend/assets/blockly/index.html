@@ -1,0 +1,2574 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <!-- EARLY height fix for Expo Android WebView.
+       window.ReactNativeWebView is injected by the native layer before any page
+       JS runs, so this script detects Expo reliably.
+       Setting CSS custom properties here means the layout is correct on the
+       very first paint — no flash of wrong sizing. -->
+  <script>    (function () {
+      if (!window.ReactNativeWebView) return;
+      var r = document.documentElement;
+      // Android WebView does not reliably re-run @media query matching
+      // (esp. after the WebView is resized post-first-paint, or on
+      // rotation), so every responsive breakpoint in main.css that needs
+      // to be trustworthy inside Expo is mirrored here as a JS-computed
+      // class instead. window.innerWidth/innerHeight are always accurate,
+      // so class toggling is used as the source of truth in place of
+      // @media for these rules — see "Fallback for Expo WebView" in
+      // main.css for the matching CSS half of each breakpoint below.
+      var BREAKPOINTS = [
+        ['expo-wv-phone', function (w) { return w <= 640; }],
+        ['expo-wv-tablet-sm', function (w) { return w >= 641 && w <= 900; }],
+        ['expo-wv-tablet-lg', function (w) { return w >= 901 && w <= 1300; }],
+        ['expo-wv-desktop-lg', function (w) { return w >= 1400; }],
+        // Phone-only variant: the mobile toolbox/devices-panel/modal CSS
+        // fixes key off this class instead of plain .expo-wv, so a tablet
+        // running inside the same app keeps the normal (>600px) layout.
+        ['expo-wv-mobile', function (w) { return w <= 1000; }],
+      ];
+      function applyExpoSizing() {
+        var h = window.innerHeight, w = window.innerWidth;
+        if (h <= 0 || w <= 0) return;
+        r.style.setProperty('--expo-h', h + 'px');
+        r.style.setProperty('--expo-w', w + 'px');
+        r.style.setProperty('--expo-content-h', (h - 63) + 'px');
+        r.classList.add('expo-wv');
+        for (var i = 0; i < BREAKPOINTS.length; i++) {
+          r.classList.toggle(BREAKPOINTS[i][0], BREAKPOINTS[i][1](w));
+        }
+      }
+      applyExpoSizing();
+      window.addEventListener('resize', applyExpoSizing);
+    })();
+  </script>
+  <title>rndmfg — Blockly (Python generator)</title>
+
+  <!-- Inter font — preconnect speeds up the DNS lookup -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    media="print" onload="this.media='all'">
+
+  <!-- Font Awesome — loaded non-blocking so it never delays first paint -->
+  <link rel="stylesheet" href="offline_libs/font-awesome/css/brands.min.css" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="offline_libs/font-awesome/css/all.min.css" media="print" onload="this.media='all'" />
+  <noscript>
+    <link rel="stylesheet" href="offline_libs/font-awesome/css/brands.min.css" />
+    <link rel="stylesheet" href="offline_libs/font-awesome/css/all.min.css" />
+  </noscript>
+
+  <script src="offline_libs/mqtt.min.js" defer></script>
+
+  <!-- Three.js for 3D Model Viewer Block Popup (served locally) -->
+  <script src="offline_libs/three/three.min.js" defer></script>
+  <script src="offline_libs/three/GLTFLoader.js" defer></script>
+  <script src="offline_libs/three/DRACOLoader.js" defer></script>
+
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Blockly v12.5.1 — loaded locally from offline_libs/blockly/
+       Order is critical: core → blocks → generator → messages
+       ═══════════════════════════════════════════════════════════ -->
+  <script src="offline_libs/blockly/blockly_compressed.js" defer></script>
+  <script src="offline_libs/blockly/blocks_compressed.js" defer></script>
+  <script src="offline_libs/blockly/python_compressed.js" defer></script>
+  <script src="offline_libs/blockly/msg/en.js" defer></script>
+  <!-- Blockly.Python alias is set at top of js/main/terminal-state.js after deferred scripts load -->
+
+
+  <link rel="stylesheet" href="css/main.css?v=12" />
+</head>
+
+<body>
+  <!-- Water Splash Effect Canvas -->
+  <canvas id="waterSplashCanvas"></canvas>
+  <div class="app">
+    <div class="topbar">
+
+      <!-- LEFT -->
+      <div class="topbar-left">
+
+        <!-- 1. CURIO LABS logo → clicks open save/load dropdown -->
+        <div class="topbar-logo-wrap">
+          <div class="topbar-logo" id="logoBtn">CURIO LABS</div>
+          <div class="logo-save-dropdown" id="logoSaveDropdown">
+            <div class="dd-label">Program</div>
+            <button id="logoNewProject"><i class="fa-solid fa-file-circle-plus"></i> New Project</button>
+            <hr>
+            <button id="logoSaveProgram"><i class="fa-solid fa-floppy-disk"></i> Save Program</button>
+            <button id="logoDownloadXml"><i class="fa-solid fa-download"></i> Download to Computer</button>
+            <hr>
+            <button id="logoUploadXml"><i class="fa-solid fa-upload"></i> Load from Computer</button>
+          </div>
+        </div>
+
+        <!-- 2. FILE OPS PILL — new / save / load (right of name input) -->
+        <div style="position:relative">
+          <button id="fileOpsPillBtn" class="file-ops-pill" title="File Options">
+            <img src="./icons/files.svg" alt="Newfiles">
+            <i class="fa-solid fa-angle-down" style="font-size:10px;opacity:0.8"></i>
+          </button>
+          <div id="fileOpsPillDropdown" class="file-ops-dropdown">
+            <div class="dd-label">Files</div>
+            <hr>
+            <button id="menuNewProject" class="file-icons"><img src="./icons/new_file.svg" alt="new_file"></img><span>
+                <p class="file-text-main">Create
+                  New</P>
+                <p class="file-text-sub">Start a new Blocky project</p>
+              </span></button>
+
+            <button id="menuDownloadXml" class="file-icons"><img src="./icons/export_file.svg" alt="download">
+              <span>
+                <p class="file-text-main">Export</P>
+                <p class="file-text-sub">Save your Blocky project file</p>
+              </span></button>
+            <button id="menuUploadXml" class="file-icons"><img src="./icons/import.svg" alt="upload"><span>
+                <p class="file-text-main">Import</P>
+                <p class="file-text-sub">Upload a saved Blocky project</p>
+              </span>
+            </button>
+          </div>
+          <!-- Old fileMenuDropdown alias (kept for any existing refs) -->
+          <div id="fileMenuDropdown" class="file-menu-dropdown hidden" style="display:none!important"></div>
+        </div>
+
+        <!-- 3. PROJECT NAME PILL — name input + edit icon -->
+        <div class="topbar-name-pill">
+          <input type="text" id="projectNameInput" value="Untitled" title="Project Name" placeholder="Project Name">
+          <img src="./icons/pencil.svg" alt="pencil">
+        </div>
+
+        <!-- 4. FILE PILL — opens project switcher dropdown -->
+        <div class="file-menu-container" style="position:relative">
+          <button id="fileMenuBtn" class="topbar-file-pill" title="Switch Project">
+            <i class="fa-solid fa-layer-group" style="font-size:13px"></i>
+            <span id="projPillLabel"
+              style="font-size:12px;font-weight:600;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Projects</span>
+            <i class="fa-solid fa-angle-down" style="font-size:10px;opacity:0.8"></i>
+          </button>
+
+          <!-- Project switcher dropdown -->
+          <div id="projSwitcherDropdown" class="proj-switcher">
+            <div class="proj-switcher-header">
+              <span id="projCountLabel">Files</span>
+              <button class="proj-new-btn" id="projNewFileBtn">
+                <i class="fa-solid fa-plus"></i> New File
+              </button>
+            </div>
+            <hr>
+            <div class="proj-switcher-list" id="projSwitcherList">
+              <!-- tabs injected by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Project tabs (hidden in UI, kept functional for data) -->
+        <div class="project-tabs-wrapper" id="projectTabsWrapper" style="display:none;position:absolute;left:-9999px">
+          <div class="project-tabs-toggle" id="projectTabsToggle" onclick="toggleProjectDropdown()">
+            <i class="fa-solid fa-layer-group"></i>
+            <span id="projectTabsCount">Projects</span>
+            <span class="ptab-arrow">▼</span>
+          </div>
+          <div class="project-tabs" id="projectTabs"></div>
+        </div>
+
+      </div><!-- /topbar-left -->
+
+      <!-- RIGHT -->
+      <div class="topbar-right">
+
+        <!-- Effect selector (hidden, kept functional) -->
+        <div class="fx-selector" style="display:none">
+          <span class="fx-icon" id="fxIcon">💧</span>
+          <select id="fxSelect" title="Block snap effect">
+            <option value="water">Water Splash</option>
+            <option value="fire">Fire Explosion</option>
+            <option value="stars">Star Sparkle</option>
+            <option value="bubbles">Bubble Pop</option>
+            <option value="electric">Electric Shock</option>
+            <option value="hearts">Love Hearts</option>
+            <option value="rainbow">Rainbow Burst</option>
+            <option value="fairy">Fairy Dust</option>
+          </select>
+        </div>
+
+        <!-- Utility icon-buttons -->
+        <div class="topbar-util-btns">
+          <!-- Bluetooth pill (temporary in topbar) -->
+          <!-- <button class="topbar-bt-pill" id="topbarBtBtn" onclick="openBT()" title="Bluetooth">
+            <i class="fa-brands fa-bluetooth-b"></i>
+            <span id="bt-text-topbar">Bluetooth</span>
+          </button> -->
+          <!-- Extension pill (tempoary in topbar) -->
+          <button class="topbar-ai-train-pill" id="topbarBoardBtn" onclick="openBoardScreen()" title="Extension">
+            🧩 Extension
+          </button>
+          <!-- <button class="btn-circle back" id="btnConnect" title="Connect Board"><i
+              class="fa-solid fa-plug"></i></button>
+          <button class="btn-circle back" id="btnBluetooth" title="Bluetooth Boot"><i
+              class="fa-brands fa-bluetooth-b"></i></button> -->
+          <!-- btnLiveMode kept hidden for JS compatibility, triggered via bottom bar -->
+          <button class="btn-circle live-mode-btn" id="btnLiveMode" title="Live Mode OFF" aria-label="Toggle Live Mode"
+            style="display:none;">&#x26A1;</button>
+        </div>
+
+        <!-- Nav buttons -->
+        <button class="nav-btn" title="Community" onclick="window.location.href='community.html'"><img
+            src="./icons/community.svg" alt="Community" />Community</button>
+        <button class="nav-btn" title="User Guide"><img src="./icons/user_guide.svg" alt="User Guide" />User
+          Guide</button>
+        <button class="nav-btn" title="Example Programs"><img src="./icons/Example_program.svg"
+            alt="Example Programs" />Example Programs</button>
+        <button class="nav-btn" title="Help"><img src="./icons/help.svg" alt="Help" /> Help</button>
+        <button class="nav-btn" id="setting" title="Settings"><img src="./icons/setting.svg" alt="Settings">
+          Settings</button>
+
+        <!-- Avatar -->
+        <div class="topbar-avatar" title="Profile">
+          <img src="./assets/img/ben10.jpeg" alt="Avatar">
+        </div>
+
+      </div><!-- /topbar-right -->
+
+    </div><!-- /topbar -->
+
+    <!-- Live mode indicator (hidden, kept for JS compatibility) -->
+    <div id="liveModeIndicator" style="display:none;position:absolute;left:-9999px;">
+      <span id="livePulseDot"></span>
+      <span id="liveLedDot"></span>
+      <span>LIVE</span>
+    </div>
+    <!-- Hidden legacy buttons kept for JS compatibility -->
+    <button id="playmode" style="display:none"></button>
+    <button id="upload" style="display:none"></button>
+    <button id="stop" style="display:none"></button>
+    <button id="soft_reset" style="display:none"></button>
+    <button id="hard_reset" style="display:none"></button>
+    <div id="bt-status-pill" style="display:none"></div>
+    <span id="bt-text" style="display:none"></span>
+
+    <section class="main" style="position:relative;">
+
+      <!-- ── BOTTOM ACTION BAR — outside workspace so it's never clipped ── -->
+      <div class="bottom-action-bar" id="bottomActionBar">
+        <!-- Run (shown when idle) -->
+        <button class="action-btn-svg" id="btnRun" title="Run program">
+          <img src="icons/play.svg" alt="Run" />
+        </button>
+        <!-- Stop (shown when running) -->
+        <button class="action-btn-svg" id="btnStop" title="Stop program" style="display:none;">
+          <img src="icons/stop.svg" alt="Stop" />
+        </button>
+
+        <div class="ab-divider"></div>
+
+        <!-- Upload -->
+        <button class="action-btn-svg" id="btnUpload" title="Upload to device">
+          <img id="imgUpload" src="icons/upload.svg" alt="Upload" />
+        </button>
+
+        <div class="ab-divider"></div>
+
+        <!-- Live -->
+        <button class="action-btn-svg" id="btnLive" title="Live mode">
+          <img id="imgLive" src="icons/live-on.svg" alt="Live" />
+        </button>
+      </div>
+      <!-- Floating Search Box — outside .workspace to avoid overflow:hidden clip -->
+      <div id="flyoutSearchContainer" class="flyout-search hidden">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" id="flyoutSearchInput" placeholder="Search blocks..." autocomplete="off">
+        <button id="flyoutSearchClear" class="flyout-search-clear" style="display:none;"><i
+            class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Search Empty State — covers flyout when search is open but no query typed -->
+      <div id="searchEmptyState" class="search-empty-state hidden">
+        <img src="icons/search_fayout.svg" alt="" class="search-empty-img" />
+        <p class="search-empty-title">Search blocks</p>
+        <p class="search-empty-sub">What block are you looking for?</p>
+      </div>
+
+      <!-- No Results State — shown when search query returns zero blocks -->
+      <div id="searchNoResults" class="search-empty-state hidden">
+        <img src="icons/no_search_block.svg" alt="" class="search-empty-img" />
+        <p class="search-no-results-title">No blocks found</p>
+        <p class="search-empty-sub">Try searching for another block</p>
+      </div>
+      <div class="workspace">
+        <div id="blocklyDiv"></div>
+
+        <!-- ══ DEVICES PANEL ══ -->
+        <div id="devices-panel">
+
+          <!-- Header: plug icon · Devices label · + button -->
+          <div class="dp-header">
+            <div class="dp-hd-icon">
+              <img src="./icons/plug.svg" alt="" />
+            </div>
+            <span class="dp-hd-label">Devices</span>
+          </div>
+
+          <!-- Device cards -->
+          <div class="dp-list">
+
+            <!-- USB / STM32 -->
+            <div class="dp-card" id="dp-card-usb" onclick="dpOpenAddModal()">
+              <div class="dp-thumb dp-thumb-usb">
+                <img src="./icons/turbo_mode.svg" alt="connected">
+              </div>
+              <div class="dp-info">
+                <div class="dp-name">STM 32</div>
+                <div class="dp-status" id="dp-usb-status">Not connected</div>
+              </div>
+              <img class="dp-state-icon" id="dp-usb-icon" src="./icons/unplug.svg" alt="disconnected" />
+            </div>
+
+          </div>
+        </div>
+        <!-- ══ /DEVICES PANEL ══ -->
+        <div id="liveTerminal">
+          <div class="lt-header">
+            <span class="lt-title">⚡LIVE TERMINAL</span>
+            <div class="lt-hcontrols">
+              <select id="ltPollRate" title="Sensor poll interval">
+                <option value="300">0.3 s</option>
+                <option value="500" selected>0.5 s</option>
+                <option value="1000">1 s</option>
+                <option value="2000">2 s</option>
+              </select>
+              <button class="lt-hbtn" id="ltPauseBtn" onclick="LiveModeEngine.Terminal.togglePause()">⏸ Pause</button>
+              <button class="lt-hbtn" onclick="LiveModeEngine.Terminal.clear()">✕ Clear</button>
+            </div>
+          </div>
+          <div id="ltBody">
+            <div class="lt-empty">Enable Live Mode (⚡) to see real-time data here</div>
+          </div>
+        </div>
+      </div>
+      <button id="showCode" title="Toggle Code Panel"><img src="./icons/slider.svg" alt=""></button>
+      <div id="codePanel" class="code">
+
+        <!-- ══ PREMIUM CODE PANEL — 3 TABS ══ -->
+
+        <!-- Panel Header -->
+        <div class="cp-panel-header">
+          <div class="cp-panel-title-row">
+            <div class="cp-panel-icon">
+              <i class="fa-solid fa-code"></i>
+            </div>
+            <span class="cp-panel-name">Code Preview</span>
+          </div>
+
+        </div>
+
+        <!-- Tab Bar -->
+        <div class="cp-tab-bar">
+          <button class="cp-tab active" id="tab-code" onclick="switchCPTab('code')">
+            <span class="tab-icon"><i class="fa-solid fa-code"></i></span>
+            Code
+            <span class="tab-badge">PY</span>
+          </button>
+          <button class="cp-tab" id="tab-terminal" onclick="switchCPTab('terminal')">
+            <span class="tab-icon"><i class="fa-solid fa-terminal"></i></span>
+            Terminal
+            <span class="tab-live-dot"></span>
+          </button>
+          <button class="cp-tab" id="tab-ai" onclick="switchCPTab('ai')">
+            <span class="tab-icon"><i class="fa-solid fa-robot"></i></span>
+            AI Chat
+          </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="cp-tab-content">
+
+          <!-- ─── PANE 1: Python Code ─── -->
+          <div class="cp-pane active" id="pane-code">
+            <!-- File meta bar -->
+            <div class="cp-code-file-bar">
+              <div class="cp-code-filename">
+                <span class="file-dot"></span>
+                main.py
+              </div>
+              <div class="cp-code-meta">
+                <span>Python</span>
+                <span>UTF-8</span>
+              </div>
+            </div>
+            <!-- Code output -->
+            <pre id="pyOut"># drag &amp; drop blocks to generate Python…</pre>
+          </div>
+
+          <!-- ─── PANE 2: Terminal ─── -->
+          <div class="cp-pane" id="pane-terminal">
+            <div class="term-card-container">
+
+              <!-- SENSORS CARD -->
+              <div class="term-card card-sensors">
+                <div class="term-card-header">Sensors</div>
+                <div class="term-card-body" id="term-sensors-body">
+                  <div class="term-empty-state">
+                    <div class="term-empty-icon"><i class="fa-solid fa-wifi"></i></div>
+                    <div class="term-empty-text">No Sensor added</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- VARIABLES CARD -->
+              <div class="term-card card-variables">
+                <div class="term-card-header">Variables</div>
+                <div class="term-card-body" id="term-variables-body">
+                  <div class="term-empty-state">
+                    <div class="term-empty-icon"><span>{x}</span></div>
+                    <div class="term-empty-text">No Variable added</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- OUTPUT CARD -->
+              <div class="term-card card-output">
+                <div class="term-card-header">
+                  <span>OUTPUT</span>
+                  <button class="term-clear-btn" onclick="rdClear()">✕ Clear</button>
+                </div>
+                <div class="term-card-body">
+                  <div class="rd-wrapper">
+                    <div id="responseDisplay"></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+
+          <!-- ─── PANE 3: AI Chat ─── -->
+          <div class="cp-pane" id="pane-ai">
+            <!-- AI Header -->
+            <div class="cp-ai-header">
+              <div class="cp-ai-brand">
+                <div class="cp-ai-brand-icon"><i class="fa-solid fa-robot"></i></div>
+                ✦ CURIO AI
+              </div>
+              <div class="cp-ai-header-actions" style="display: flex; gap: 8px; align-items: center;">
+                <button class="cp-ai-key-btn" id="cpAiKeyBtn" onclick="toggleApiKeyPanel()"
+                  title="Configure OpenRouter API Key"
+                  style="background:none; border:none; color:#3D5AE0; cursor:pointer; opacity:0.8; font-size:12px; display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:7px; border:1px solid #DDE1F5; background:#F1F4FF; transition:all 0.15s;">
+                  <i class="fa-solid fa-key"></i>
+                </button>
+                <button class="cp-ai-new-btn" onclick="cpAiClearChat()">
+                  <i class="fa-solid fa-plus" style="font-size:8px"></i> New chat
+                </button>
+              </div>
+            </div>
+            <!-- API Key Slide-Down Panel -->
+            <div class="cp-ai-apikey-panel" id="cpAiApiKeyPanel" style="flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.05em;">OPENROUTER API
+                  KEY</span>
+                <a href="https://openrouter.ai/keys" target="_blank"
+                  style="font-size: 10px; font-weight: 600; color: #3D5AE0; text-decoration: none; display: flex; align-items: center; gap: 3px;">
+                  Get Key <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 8px;"></i>
+                </a>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <input type="password" id="cpAiApiKeyInput" placeholder="Paste OpenRouter API key (sk-or-...)"
+                  style="flex: 1; background: #fff; border: 1.5px solid #E8ECF4; border-radius: 8px; padding: 6px 10px; font-size: 11px; outline: none; transition: border-color 0.15s;"
+                  onkeydown="if(event.key==='Enter')saveApiKey()" />
+                <button onclick="saveApiKey()"
+                  style="background: #3D5AE0; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s;">
+                  Save
+                </button>
+              </div>
+              <div id="cpAiKeyStatus" style="font-size: 9.5px; font-weight: 500; color: #64748b; margin-top: -2px;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+                <span style="font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.05em;">AI MODEL</span>
+                <select id="cpAiModelSelect" onchange="saveAiModel()"
+                  style="width: 100%; background: #fff; border: 1.5px solid #E8ECF4; border-radius: 8px; padding: 6px 10px; font-size: 11px; outline: none; cursor: pointer; color: #334155; font-weight: 500;">
+                  <optgroup label="── Free Models ──" style="font-weight:700; color:#22c55e;">
+                    <option value="nex-agi/nex-n2-pro:free" selected>Nex-N2-Pro (Free)</option>
+                    <option value="google/gemma-2-9b-it:free">Gemma 2 9B (Free)</option>
+                    <option value="openrouter/free">Auto Free Router</option>
+                  </optgroup>
+                  <optgroup label="── Paid Models ──" style="font-weight:700; color:#f59e0b;">
+                    <option value="qwen/qwen-2.5-coder-32b-instruct">Qwen 2.5 Coder 32B (Paid)</option>
+                    <option value="google/gemini-3.5-flash">Gemini 3.5 Flash (Paid - Cheap/Fast)</option>
+                    <option value="google/gemini-3.1-pro">Gemini 3.1 Pro (Paid - Reasoning)</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+            <!-- Messages -->
+            <div class="cp-ai-messages" id="cpAiMessages">
+              <div class="ai-msg-bot">
+                <div class="ai-msg-avatar"><i class="fa-solid fa-robot"></i></div>
+                <div class="ai-msg-bubble">
+                  Hi! I'm Curio, your coding buddy. Ask me about your blocks, the code, or anything in the terminal —
+                  I'll explain it the easy way.
+                </div>
+              </div>
+            </div>
+            <!-- Quick reply chips -->
+            <div class="cp-ai-chips" id="cpAiChips">
+              <button class="ai-chip" onclick="cpAiQuickSend('Explain this code')">Explain this code</button>
+              <button class="ai-chip" onclick="cpAiQuickSend('Why is the if block False?')">Why is the if block
+                False?</button>
+              <button class="ai-chip" onclick="cpAiQuickSend('How do I fix the error?')">How do I fix error?</button>
+            </div>
+            <!-- Input row -->
+            <div class="cp-ai-input-row">
+              <input class="cp-ai-input" id="cpAiInputField" type="text" placeholder="Ask about your code…"
+                onkeydown="if(event.key==='Enter')cpAiSend()" />
+              <button class="cp-ai-send-btn" onclick="cpAiSend()" title="Send">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Hidden legacy cards for JS compatibility -->
+        <div id="cp-card" style="display:none">
+          <div id="cp-header"></div>
+          <div class="cp-divider"></div>
+        </div>
+        <div id="terminal-card" style="display:none">
+          <div id="terminal-header"></div>
+          <div class="term-divider"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- //setting slide bar -->
+    <div class="setting-slide" id="slide-setting">
+      <div class="setting-head">
+        <div class="setting-title">
+          <img src="./icons/setting_inner.svg" alt="setting_icon">
+          <p>Settings</p>
+        </div>
+        <img src="./icons/close.svg" alt="close_icon" id="close">
+      </div>
+
+      <div class="setting-body">
+        <div class="setting-element">
+          <div class=setting-element-img>
+            <img src="./icons/dark_mode.svg" alt="darkmode">
+            <p>Dark Mode</p>
+          </div>
+
+
+          <div class="checkbox-wrapper-34">
+            <input class='tgl tgl-ios' id='toggle-35' type='checkbox'>
+            <label class='tgl-btn' for='toggle-35'></label>
+          </div>
+
+        </div>
+        <div class="setting-element">
+          <div class=setting-element-img>
+            <img src="./icons/full_screen.svg" alt="full_screen">
+            <p>Full Screen</p>
+          </div>
+
+          <div class="checkbox-wrapper-34">
+            <input class='tgl tgl-ios' id='toggle-36' type='checkbox'>
+            <label class='tgl-btn' for='toggle-36'></label>
+          </div>
+        </div>
+        <div class="setting-element">
+          <div class=setting-element-img>
+            <img src="./icons/turbo_mode.svg" alt="turbo_mode">
+            <p>Stage Turbo Mode</p>
+          </div>
+
+          <div class="checkbox-wrapper-34">
+            <input class='tgl tgl-ios' id='toggle-37' type='checkbox'>
+            <label class='tgl-btn' for='toggle-37'></label>
+          </div>
+        </div>
+        <div class="setting-element">
+          <div class=setting-element-img>
+            <img src="./icons/hide.svg" alt="hide">
+            <p>Hide Stage</p>
+          </div>
+
+          <div class="checkbox-wrapper-34">
+            <input class='tgl tgl-ios' id='toggle-38' type='checkbox'>
+            <label class='tgl-btn' for='toggle-38'></label>
+          </div>
+        </div>
+        <div class="setting-element">
+          <div class=setting-element-img>
+            <img src="./icons/workspace_grid.svg" alt="workspace_grid">
+            <p>Workspace grid snap</p>
+          </div>
+
+          <div class="checkbox-wrapper-34">
+            <input class='tgl tgl-ios' id='toggle-39' type='checkbox'>
+            <label class='tgl-btn' for='toggle-39'></label>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="setting-body-2">
+        <div class="setting-element">
+          <button class="btn-circle save" id="btnSave" title="Save"><i class="fa-solid fa-download"></i></button>
+
+          <button class="btn-circle unlink" id="btnDisconnect" title="Disconnect"><i
+              class="fa-solid fa-xmark"></i></button>
+
+        </div>
+        <div class="setting-element">
+          <button class="btn-circle cwl" id="btnboot" title="save board"><i
+              class="fa-solid fa-cloud-arrow-up"></i></button>
+          <button class="btn-circle fwd" id="btnLoad" title="Load"><i class="fa-brands fa-openid"></i></button>
+        </div>
+        <div class="setting-element">
+          <button class="btn-circle back" id="btnClear" title="Clear"><i class="fa-solid fa-broom"></i></button>
+
+          <button class="btn-circle undo" id="btnUndo" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+          <button class="btn-circle redo" id="btnRedo" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       BLOCKLY v12 DYNAMIC TOOLBOX — JS config object
+       Dynamic categories: ⭐ RECENT_BLOCKS  ❤️ FAVORITE_BLOCKS  SEARCH_CATEGORY
+       Every category has a unique id so getToolboxItemById() works.
+       ═══════════════════════════════════════════════════════════════ -->
+  <script src="js/main/toolbox-config.js?v=7" defer></script>
+
+  <!-- Toolbox XML kept as data source for search index -->
+  <!-- Toolbox XML kept as data source for search index -->
+  <xml id="toolbox" style="display:none">
+    <category name="Search" custom="SEARCH_CATEGORY" colour="#526271" id="cat_search"></category>
+
+    <!-- ══ SENSORS ══ -->
+    <category name="📡 Sensors" colour="#E67E22" id="cat_sensors">
+      <category name="🌡️ Environmental" colour="#E59866" id="cat_environmental">
+        <block type="tep_ana"></block>
+        <block type="ana_temp"></block>
+        <block type="din_temp"></block>
+        <block type="temp_sensor"></block>
+        <block type="sen_temp"></block>
+        <block type="IR-Temp"></block>
+        <block type="ir_temp"></block>
+        <block type="temp2-sensor"></block>
+        <block type="humidity"></block>
+        <block type="soil_moisture"></block>
+        <block type="dust"></block>
+        <block type="Air_quality_sensor"></block>
+        <block type="water_sensor"></block>
+        <block type="water-turbidity-sensor"></block>
+        <block type="TDS_Water_sensor"></block>
+        <block type="pressure"></block>
+      </category>
+      <category name="🏃 Motion &amp; Position" colour="#DC7633" id="cat_motion">
+        <block type="din_motion"></block>
+        <block type="din_proximity"></block>
+        <block type="din_tilt"></block>
+        <block type="din_ultra"></block>
+        <block type="din_ultra_range"></block>
+        <block type="sen_ultrasonic"></block>
+        <block type="accelerometer_sensor"></block>
+        <block type="accelerometer"></block>
+        <block type="compass"></block>
+        <block type="mag_encoder"></block>
+        <block type="gusture"></block>
+        <block type="flex-sensor"></block>
+        <block type="shock_sensor"></block>
+        <block type="vibration-switch-sensor"></block>
+        <block type="joystick_move"></block>
+      </category>
+      <category name="💡 Light &amp; Color" colour="#F39C12" id="cat_light">
+        <block type="ldr"></block>
+        <block type="din_ir"></block>
+        <block type="ir_sen"></block>
+        <block type="colour_sen"></block>
+        <block type="ambient-sen"></block>
+        <block type="uv_sensor"></block>
+        <block type="light_freq"></block>
+        <block type="magnetic_sensor"></block>
+      </category>
+      <category name="❤️ Biometric &amp; Safety" colour="#E74C3C" id="cat_biometric">
+        <block type="heart_beat"></block>
+        <block type="ecg"></block>
+        <block type="max"></block>
+        <block type="din_flame"></block>
+        <block type="din_door"></block>
+        <block type="din_sound"></block>
+        <block type="din_button"></block>
+        <block type="touch_sensor"></block>
+        <block type="finger_print_enroll"></block>
+        <block type="finger_print_match"></block>
+      </category>
+      <category name="⚡ Electrical" colour="#D35400" id="cat_electrical">
+        <block type="Current-sensor"></block>
+        <block type="voltage_sensor"></block>
+        <block type="load_cell"></block>
+        <block type="flexi_force_sensor"></block>
+        <block type="piezo_sensor"></block>
+      </category>
+      <category name="🔬 Specialised" colour="#BA4A00" id="cat_specialised">
+        <block type="rtc_sensor"></block>
+        <block type="rfid"></block>
+        <block type="nfc_reader"></block>
+        <block type="rc_sensor"></block>
+        <block type="xray_sensor"></block>
+        <block type="tem_sensor"></block>
+        <block type="sensor"></block>
+        <block type="ceprom"></block>
+      </category>
+    </category>
+
+    <!-- ══ ACTUATORS ══ -->
+    <category name="⚙️ Actuators" colour="#2E86C1" id="cat_actuators">
+      <category name="🔄 Motors" colour="#2874A6" id="cat_motors">
+        <block type="do_dc_motor"></block>
+        <block type="do_dc_motor2"></block>
+        <block type="steper"></block>
+        <block type="mini_motor"></block>
+        <block type="remote_motor"></block>
+        <block type="water_motor"></block>
+        <block type="tank_motor"></block>
+        <block type="motor_driver"></block>
+        <block type="waterpump"></block>
+        <block type="minifan"></block>
+      </category>
+      <category name="🦾 Servo" colour="#1A5276" id="cat_servo">
+        <block type="do_servo"></block>
+      </category>
+      <category name="🔌 Relay &amp; Switch" colour="#154360" id="cat_relay">
+        <block type="relay"></block>
+        <block type="solinoid"></block>
+        <block type="animo"></block>
+        <block type="port_on"></block>
+        <block type="port_off"></block>
+        <block type="do_onoff"></block>
+      </category>
+    </category>
+
+    <!-- ══ DISPLAY & LIGHTS ══ -->
+    <category name="💡 Display &amp; Lights" colour="#F39C12" id="cat_display">
+      <category name="🔦 LEDs" colour="#F8C471" id="cat_leds">
+        <block type="do_led"></block>
+        <block type="do_led_param"></block>
+        <block type="red_led"></block>
+        <block type="yellow_led"></block>
+        <block type="green_led"></block>
+      </category>
+      <category name="🌈 RGB" colour="#E59866" id="cat_rgb">
+        <block type="rgb_display"></block>
+        <block type="rgb_led_display"></block>
+        <block type="rgb_component"></block>
+      </category>
+      <category name="🖥️ Screen" colour="#D4AC0D" id="cat_screen">
+        <block type="LCD"></block>
+        <block type="LCD_print"></block>
+        <block type="text_speech"></block>
+      </category>
+    </category>
+
+    <!-- ══ INPUT DEVICES ══ -->
+    <category name="🔊 Input Devices" colour="#27AE60" id="cat_input">
+      <block type="din_button"></block>
+      <block type="keypad"></block>
+      <block type="touch_sensor"></block>
+      <block type="joystick_move"></block>
+      <block type="buzzer"></block>
+      <block type="buzzer_component"></block>
+    </category>
+
+    <!-- ══ COMMUNICATION ══ -->
+    <category name="📶 Communication" colour="#8E44AD" id="cat_comm">
+      <category name="📡 Wireless" colour="#7D3C98" id="cat_wireless">
+        <block type="bt_send"></block>
+      </category>
+      <category name="🪪 Identification" colour="#6C3483" id="cat_identification">
+        <block type="rfid"></block>
+        <block type="nfc_reader"></block>
+        <block type="rfc"></block>
+        <block type="finger_print_enroll"></block>
+        <block type="finger_print_match"></block>
+      </category>
+    </category>
+
+    <sep></sep>
+
+    <!-- ══ CONTROL FLOW ══ -->
+    <category name="🔁 Control Flow" colour="#E74C3C" id="cat_control">
+      <category name="🧠 Logic" colour="#C0392B" id="cat_logic">
+        <block type="start"></block>
+        <block type="din_if_else"></block>
+        <block type="custom_if_then"></block>
+        <block type="any_input_block"></block>
+        <block type="system_status"></block>
+        <block type="logic_boolean">
+          <field name="BOOL">TRUE</field>
+        </block>
+        <block type="logic_operation">
+          <field name="OP">AND</field>
+        </block>
+        <block type="logical_comparison"></block>
+        <block type="compare"></block>
+        <block type="logic_compare">
+          <field name="OP">EQ</field>
+          <value name="A">
+            <shadow type="math_number">
+              <field name="NUM">10</field>
+            </shadow>
+          </value>
+          <value name="B">
+            <shadow type="math_number">
+              <field name="NUM">5</field>
+            </shadow>
+          </value>
+        </block>
+        <block type="controls_if">
+          <value name="IF0">
+            <shadow type="logic_boolean">
+              <field name="BOOL">TRUE</field>
+            </shadow>
+          </value>
+        </block>
+      </category>
+      <category name="🔄 Loops" colour="#E74C3C" id="cat_loops">
+        <block type="lp_while"></block>
+        <block type="lp_start"></block>
+        <block type="lp_repeat_count"></block>
+        <block type="lp_label"></block>
+        <block type="lp_break"></block>
+        <block type="loop_end"></block>
+        <block type="controls_repeat_ext">
+          <value name="TIMES">
+            <shadow type="math_number">
+              <field name="NUM">5</field>
+            </shadow>
+          </value>
+        </block>
+        <block type="controls_for">
+          <field name="VAR">i</field>
+          <value name="FROM">
+            <shadow type="math_number">
+              <field name="NUM">0</field>
+            </shadow>
+          </value>
+          <value name="TO">
+            <shadow type="math_number">
+              <field name="NUM">10</field>
+            </shadow>
+          </value>
+        </block>
+      </category>
+      <category name="⏱️ Delay &amp; Timing" colour="#C0392B" id="cat_delay">
+        <block type="ctl_delay"></block>
+      </category>
+    </category>
+
+    <!-- ══ DATA ══ -->
+    <category name="📊 Data" colour="#1ABC9C" id="cat_data">
+      <category name="🔢 Math" colour="#17A589" id="cat_math">
+        <block type="math_number">
+          <field name="NUM">0</field>
+        </block>
+        <block type="math_arithmetic">
+          <field name="OP">ADD</field>
+          <value name="A">
+            <shadow type="math_number">
+              <field name="NUM">1</field>
+            </shadow>
+          </value>
+          <value name="B">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
+        </block>
+        <block type="math_random_int">
+          <value name="FROM">
+            <shadow type="math_number">
+              <field name="NUM">1</field>
+            </shadow>
+          </value>
+          <value name="TO">
+            <shadow type="math_number">
+              <field name="NUM">100</field>
+            </shadow>
+          </value>
+        </block>
+      </category>
+      <category name="🔤 Text" colour="#148F77" id="cat_text">
+        <block type="text">
+          <field name="TEXT">Hello</field>
+        </block>
+        <block type="text_join">
+          <value name="ADD0">
+            <shadow type="text">
+              <field name="TEXT">Hello</field>
+            </shadow>
+          </value>
+          <value name="ADD1">
+            <shadow type="text">
+              <field name="TEXT">World</field>
+            </shadow>
+          </value>
+        </block>
+        <block type="text_length">
+          <value name="VALUE">
+            <shadow type="text">
+              <field name="TEXT">Blockly</field>
+            </shadow>
+          </value>
+        </block>
+      </category>
+      <category name="📦 Variables" custom="VARIABLE" colour="#0E6655" id="cat_variables"></category>
+      <category name="📋 Lists" custom="LIST" colour="#0A3D62" id="cat_lists"></category>
+    </category>
+
+    <category name="🔧 Functions" custom="PROCEDURE" colour="#FF1493" id="cat_functions"></category>
+
+    <sep></sep>
+
+    <!-- ══ VISUALISATION ══ -->
+
+    <category name="🌐 3D Simulations" colour="#4F46E5" id="cat_3d">
+      <block type="three_d_model"></block>
+      <block type="speedo_3d"></block>
+      <block type="sim_solar"></block>
+      <block type="sim_pendulum"></block>
+      <block type="sim_particles"></block>
+      <block type="sim_dna"></block>
+      <block type="sim_gears"></block>
+      <block type="sim_wave"></block>
+      <block type="sim_bouncing"></block>
+      <block type="sim_windmill"></block>
+      <block type="sim_atom"></block>
+      <block type="sim_globe"></block>
+    </category>
+
+    <sep></sep>
+
+    <category name="default block" colour="#9ACD32">
+      <block type="math_number">
+        <field name="NUM">0</field>
+      </block>
+      <block type="math_number">
+        <field name="NUM">0</field>
+      </block>
+
+      <block type="math_arithmetic">
+        <field name="OP">ADD</field>
+        <value name="A">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <value name="B">
+          <block type="math_number">
+            <field name="NUM">2</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="math_random_int">
+        <value name="FROM">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </value>
+        <value name="TO">
+          <block type="math_number">
+            <field name="NUM">100</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="text">
+        <field name="TEXT">Hello</field>
+      </block>
+
+      <block type="text_join">
+        <value name="ADD0">
+          <block type="text">
+            <field name="TEXT">Hello</field>
+          </block>
+        </value>
+        <value name="ADD1">
+          <block type="text">
+            <field name="TEXT">World</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="text_length">
+        <value name="VALUE">
+          <block type="text">
+            <field name="TEXT">Blockly</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="variables_set">
+        <field name="VAR">item</field>
+        <value name="VALUE">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="variables_get">
+        <field name="VAR">item</field>
+      </block>
+
+      <block type="variables_set">
+        <field name="VAR">counter</field>
+        <value name="VALUE">
+          <block type="math_number">
+            <field name="NUM">0</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="controls_if">
+        <value name="IF0">
+          <block type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </block>
+        </value>
+        <statement name="DO0">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </statement>
+      </block>
+
+      <block type="controls_repeat_ext">
+        <value name="TIMES">
+          <block type="math_number">
+            <field name="NUM">5</field>
+          </block>
+        </value>
+        <statement name="DO">
+          <block type="math_number">
+            <field name="NUM">1</field>
+          </block>
+        </statement>
+      </block>
+
+      <block type="controls_for">
+        <field name="VAR">i</field>
+        <value name="FROM">
+          <block type="math_number">
+            <field name="NUM">0</field>
+          </block>
+        </value>
+        <value name="TO">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </value>
+        <statement name="DO">
+          <block type="math_number">
+            <field name="NUM">i</field>
+          </block>
+        </statement>
+      </block>
+
+      <block type="logic_boolean">
+        <field name="BOOL">TRUE</field>
+      </block>
+
+      <block type="logic_compare">
+        <field name="OP">EQ</field>
+        <value name="A">
+          <block type="math_number">
+            <field name="NUM">10</field>
+          </block>
+        </value>
+        <value name="B">
+          <block type="math_number">
+            <field name="NUM">5</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="logic_operation">
+        <field name="OP">AND</field>
+        <value name="A">
+          <block type="logic_boolean">
+            <field name="BOOL">TRUE</field>
+          </block>
+        </value>
+        <value name="B">
+          <block type="logic_boolean">
+            <field name="BOOL">FALSE</field>
+          </block>
+        </value>
+      </block>
+
+      <block type="procedures_defnoreturn">
+        <field name="NAME">doSomething</field>
+        <statement name="STACK">
+          <block type="math_number">
+            <field name="NUM">5</field>
+          </block>
+        </statement>
+      </block>
+
+      <block type="procedures_callnoreturn">
+        <field name="NAME">doSomething</field>
+      </block>
+    </category>
+
+    <!-- A.I. Vision — same id as JSON toolbox; contents injected on Deploy from Training -->
+    <category name="A.I. Vision" colour="#f54254" id="cat_ai_blocks">
+      <block type="ai_block"></block>
+      <block type="ai_output"></block>
+      <block type="object_de"></block>
+      <block type="object_out"></block>
+    </category>
+  </xml>
+
+  <!-- Port selection modal -->
+  <div id="portSelectionModal">
+    <div class="box">
+      <h3>Digital Pins</h3>
+      <div class="box1">
+        <div class="row"><label><input type="checkbox" id="portD3"> P1</label></div>
+        <div class="row"><label><input type="checkbox" id="portD4"> P2</label></div>
+        <div class="row"><label><input type="checkbox" id="portD5"> P3</label></div>
+        <div class="row"><label><input type="checkbox" id="portD6"> P4</label></div>
+        <div class="row"><label><input type="checkbox" id="portD7"> P5</label></div>
+
+      </div>
+      <div class="box2">
+        <div class="row"><label><input type="checkbox" id="portE0"> P6</label></div>
+        <div class="row"><label><input type="checkbox" id="portE1"> P7</label></div>
+        <div class="row"><label><input type="checkbox" id="portG3"> P8</label></div>
+        <div class="row"><label><input type="checkbox" id="portG0"> P9</label></div>
+        <div class="row"><label><input type="checkbox" id="portG1"> P10</label></div>
+        <div class="row"><label><input type="checkbox" id="portG2"> P11</label></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button onclick="savePortSelection()">Save</button>
+        <button onclick="closePortModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Servo selection modal -->
+  <div id="servoSelectionModal"
+    style="display:none;position:fixed;inset:0;z-index:4200;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+    <div class="box-servo-popup">
+      <h3>Servo Configuration</h3>
+      <div
+        style="display:flex;flex-direction:row;width:100%;gap:20px;justify-content:space-around;align-items:flex-start;">
+        <div style="flex:0.8;border-right:2px solid #eee;padding-right:20px;">
+          <h4 style="text-align:center;">Select Ports</h4>
+          <div class="box1 motor-box1">
+            <div class="motor-box1-p1">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_E11" value="E11"><label class="tgl-btn" data-tg-off="E11" data-tg-on="E11 ON"
+                  for="s_E11"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_E12" value="E12"><label class="tgl-btn" data-tg-off="E12" data-tg-on="E12 ON"
+                  for="s_E12"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_E13" value="E13"><label class="tgl-btn" data-tg-off="E13" data-tg-on="E13 ON"
+                  for="s_E13"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_E14" value="E14"><label class="tgl-btn" data-tg-off="E14" data-tg-on="E14 ON"
+                  for="s_E14"></label></div>
+            </div>
+            <div class="motor-box1-p2">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_B8" value="B8"><label class="tgl-btn" data-tg-off="B8" data-tg-on="B8 ON" for="s_B8"></label>
+              </div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_B9" value="B9"><label class="tgl-btn" data-tg-off="B9" data-tg-on="B9 ON" for="s_B9"></label>
+              </div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_B15" value="B15"><label class="tgl-btn" data-tg-off="B15" data-tg-on="B15 ON"
+                  for="s_B15"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" name="servoPort"
+                  id="s_D15" value="D15"><label class="tgl-btn" data-tg-off="D15" data-tg-on="D15 ON"
+                  for="s_D15"></label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Servo Simulation -->
+        <div class="servo3d-section" style="flex:1;border-right:2px solid #eee;padding-right:20px;">
+          <canvas id="servo3DCanvas"></canvas>
+          <div class="servo3d-angle-arrows">
+            <button class="servo3d-arrow-up" onclick="changeServoAngle(15)">&#9650;</button>
+            <button class="servo3d-arrow-down" onclick="changeServoAngle(-15)">&#9660;</button>
+          </div>
+          <p class="servo3d-label">Drag to rotate view</p>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;">
+          <h4 style="text-align:center;">Set Angle</h4>
+          <div class="servo-meter" style="transform:scale(0.65);margin-top:-40px;margin-bottom:-40px;">
+            <div class="gauge-background"></div>
+            <div class="fill-cover" id="servoFill"></div>
+            <div class="center-hole"></div>
+            <div class="text-area-servo">
+              <h3>Angle</h3>
+              <p id="angle-text">0°</p>
+            </div>
+            <div class="center-point-servo"></div>
+            <div class="arrow-wrapper-servo" id="servoNeedle">
+              <div class="speed-arrow-servo"></div>
+            </div>
+          </div>
+          <div class="btn-con">
+            <button type="button" id="Incerease" onclick="changeServoAngle(15)"
+              style="padding:10px 20px;background-color:#4CAF50;">+ Increase</button>
+            <button type="button" id="Decerease" onclick="changeServoAngle(-15)"
+              style="padding:10px 20px;background-color:#F44336;">- Decrease</button>
+          </div>
+        </div>
+      </div>
+      <div
+        style="display:flex;gap:15px;justify-content:center;margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
+        <button onclick="saveServoSelection()" style="background:#4CAF50;color:white;border-radius:5px;">Save</button>
+        <button onclick="closeServoModal()" style="background:#f44336;color:white;border-radius:5px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Motor selection modal -->
+  <div id="motorSelectionModal" style="display:none;">
+    <div class="box">
+      <h3>Select Motor(s)</h3>
+      <div class="box1">
+        <div class="row"><label><input type="checkbox" id="motorP1"> P1</label></div>
+        <div class="row"><label><input type="checkbox" id="motorP2"> P2</label></div>
+        <div class="row"><label><input type="checkbox" id="motorP3"> P3</label></div>
+        <div class="row"><label><input type="checkbox" id="motorP4"> P4</label></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button onclick="saveMotorSelection()">Save</button>
+        <button onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LED pin selection modal (Analog Pins selection) -->
+  <div id="ledPinSelectionModal"
+    style="display:none;position:fixed;inset:0;z-index:4200;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+    <div class="box box-motor">
+      <h3 style="margin-bottom:15px;text-align:center;">Analog Pins</h3>
+
+      <div class="box1">
+        <div class="row"><label><input type="checkbox" id="ledPinC0"> P1</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinC1"> P2</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinC2"> P3</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinF9"> P4</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinC4"> P5</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinC5"> P6</label></div>
+      </div>
+      <div class="box2">
+
+        <div class="row"><label><input type="checkbox" id="ledPinA1"> P7</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinA2"> P8</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinA4"> P9</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinF8"> P10</label></div>
+        <div class="row"><label><input type="checkbox" id="ledPinA6"> P11</label></div>
+
+      </div>
+      <div
+        style="display:flex;gap:15px;justify-content:center;margin-top:20px;border-top:1px solid #eee;padding-top:15px;width:100%;">
+        <button type="button" onclick="saveLedPinSelection()"
+          style="background:#4CAF50;color:white;padding:10px 30px;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;box-shadow:0 4px 6px rgba(0,0,0,0.1);">Save</button>
+        <button type="button" onclick="closeLedPinModal()"
+          style="background:#f44336;color:white;padding:10px 30px;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;box-shadow:0 4px 6px rgba(0,0,0,0.1);">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="wifiSettingsModal" style="display:none;">
+    <div class="box">
+      <h3>WiFi Configuration</h3>
+      <div class="row" style="width:100%;margin-bottom:10px;">
+        <input type="text" id="wifiSSID" placeholder="Enter SSID Name"
+          style="width:90%;padding:8px;border-radius:5px;border:1px solid #ccc;">
+      </div>
+      <div class="row" style="width:100%;margin-bottom:15px;">
+        <input type="password" id="wifiPass" placeholder="Enter Password"
+          style="width:90%;padding:8px;border-radius:5px;border:1px solid #ccc;">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button onclick="saveWifiSettings()">Save & Connect</button>
+        <button onclick="closeWifiModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Minifan Modal -->
+  <div id="minifanSelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <img src="./icons/mini_fan_icon.svg" class="mf-header-icon" alt="icon">
+          <div>
+            <h2 class="mf-header-title">DC Fan</h2>
+            <p class="mf-header-subtitle">Choose where your sensor is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">PWM</div>
+          <button onclick="closeMinifanModal()" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <canvas id="minifan3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="minifanLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Sensor Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container" id="minifanPins">
+              <label class="mf-pin-label">
+                <input type="radio" name="minifanPort" value="P1" style="display:none;" checked
+                  onchange="updateMinifanPortUI()">
+                <div class="mf-port-box selected">
+                  P1
+                  <div class="mf-port-check selected">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                </div>
+              </label>
+              <label class="mf-pin-label">
+                <input type="radio" name="minifanPort" value="P2" style="display:none;"
+                  onchange="updateMinifanPortUI()">
+                <div class="mf-port-box">
+                  P2
+                  <div class="mf-port-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                </div>
+              </label>
+              <label class="mf-pin-label">
+                <input type="radio" name="minifanPort" value="P3" style="display:none;"
+                  onchange="updateMinifanPortUI()">
+                <div class="mf-port-box">
+                  P3
+                  <div class="mf-port-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                </div>
+              </label>
+              <label class="mf-pin-label">
+                <input type="radio" name="minifanPort" value="P4" style="display:none;"
+                  onchange="updateMinifanPortUI()">
+                <div class="mf-port-box">
+                  P4
+                  <div class="mf-port-check">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <img style="width: 15px;" src="./icons/fan_speed.svg" alt="speed_fan">
+                Fan Speed
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-speed-container">
+              <div class="mf-speed-slider-wrap">
+                <input type="range" id="minifanSpeed" min="0" max="10" value="7" class="mf-speed-slider"
+                  oninput="document.getElementById('minifanSpeedVal').innerText=this.value; updateMinifanPowerUI(); updateMinifanSliderColor(this);">
+                <div class="mf-speed-labels">
+                  <span>Slow</span><span>Fast</span>
+                </div>
+              </div>
+              <div class="mf-speed-value-wrap">
+                <span id="minifanSpeedVal">7</span> <span class="mf-speed-max">/ 10</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 3</span>
+            </div>
+            <div class="mf-power-container" id="minifanPower">
+              <label class="mf-power-label">
+                <input type="radio" name="minifanState" value="ON" style="display:none;" checked
+                  onchange="updateMinifanPowerUI()">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="minifanState" value="OFF" style="display:none;"
+                  onchange="updateMinifanPowerUI()">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeMinifanModal()" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveMinifanSelection()" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IR Sensor Modal (sensor popup template — see Minifan Modal above) -->
+  <div id="irSelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <div class="mf-header-icon"
+            style="background:#FFF2DB; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1a10 10 0 0 1 0-14.2"></path>
+              <path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path>
+              <path d="M19.1 4.9a10 10 0 0 1 0 14.2"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 class="mf-header-title">IR Sensor</h2>
+            <p class="mf-header-subtitle">Choose where your sensor is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">DIGITAL</div>
+          <button onclick="closeSensorModal('ir')" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <canvas id="ir3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="irLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <img id="irImage" class="mf-3d-static-image" style="display:none;" alt="">
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Sensor Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container wrap" id="irPins"></div>
+          </div>
+
+          <!-- Step 2 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-power-container" id="irPower">
+              <label class="mf-power-label">
+                <input type="radio" name="irState" value="ON" style="display:none;" checked
+                  onchange="updateSensorPowerUI('ir')">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="irState" value="OFF" style="display:none;"
+                  onchange="updateSensorPowerUI('ir')">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeSensorModal('ir')" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveSensorSelection('ir')" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relay Modal (sensor popup template — see Minifan Modal above) -->
+  <div id="relaySelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <div class="mf-header-icon"
+            style="background:#FB913B; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#ffffff" stroke="#FB913B" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="5" width="22" height="14" rx="7" ry="7"></rect>
+              <circle cx="16" cy="12" r="3"></circle>
+            </svg>
+          </div>
+          <div>
+            <h2 class="mf-header-title">Relay</h2>
+            <p class="mf-header-subtitle">Choose where your relay is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">Digital</div>
+          <button onclick="closeSensorModal('relay')" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <canvas id="relay3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="relayLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <img id="relayImage" class="mf-3d-static-image" style="display:none;" alt="">
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Sensor Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container wrap" id="relayPins"></div>
+          </div>
+
+          <!-- Step 2 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-power-container" id="relayPower">
+              <label class="mf-power-label">
+                <input type="radio" name="relayState" value="ON" style="display:none;" checked
+                  onchange="updateSensorPowerUI('relay')">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="relayState" value="OFF" style="display:none;"
+                  onchange="updateSensorPowerUI('relay')">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeSensorModal('relay')" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveSensorSelection('relay')" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Cell Modal (sensor popup template — see Minifan Modal above) -->
+  <div id="loadcellSelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <div class="mf-header-icon"
+            style="background:#FB913B; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#ffffff" stroke="#FB913B" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a10 10 0 1 0 10 10"></path>
+              <path d="M12 12L18 6"></path>
+              <path d="M12 12h.01"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 class="mf-header-title">Load Cell</h2>
+            <p class="mf-header-subtitle">Choose where your sensor is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">Digital</div>
+          <button onclick="closeSensorModal('loadcell')" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <canvas id="loadcell3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="loadcellLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <img id="loadcellImage" class="mf-3d-static-image" style="display:none;" alt="">
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Sensor Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container wrap" id="loadcellPins"></div>
+          </div>
+
+          <!-- Step 2 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-power-container" id="loadcellPower">
+              <label class="mf-power-label">
+                <input type="radio" name="loadcellState" value="ON" style="display:none;" checked
+                  onchange="updateSensorPowerUI('loadcell')">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="loadcellState" value="OFF" style="display:none;"
+                  onchange="updateSensorPowerUI('loadcell')">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeSensorModal('loadcell')" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveSensorSelection('loadcell')" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- IR Sensor (ir_sen block) Modal (sensor popup template — see Minifan Modal above).
+       No power step: ir_sen has no STATE field, it's a plain boolean read. -->
+  <div id="irSenSelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <div class="mf-header-icon"
+            style="background:#FCEEE3; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E57333" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1a10 10 0 0 1 0-14.2"></path>
+              <path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path>
+              <path d="M19.1 4.9a10 10 0 0 1 0 14.2"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 class="mf-header-title">IR Sensor</h2>
+            <p class="mf-header-subtitle">Choose where your sensor is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">DIGITAL</div>
+          <button onclick="closeSensorModal('irsen')" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <div class="mf-3d-badge" title="3D View">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B5563" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+              </path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <canvas id="irsen3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="irsenLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <img id="irsenImage" class="mf-3d-static-image" style="display:none;" alt="">
+          <!-- Move Hand — manual control only, the hand does not move on its
+               own. Drag right = hand moves near, drag left = hand moves far.
+               The beam still fires/returns automatically on its own cycle,
+               always aimed at wherever this leaves the hand. Lives on the
+               canvas itself (not the side panel) since it directly controls
+               what's in this view. -->
+          <div class="mf-3d-hand-slider">
+            <span>Near</span>
+            <input type="range" id="irsenHandRange" min="0" max="100" value="85" oninput="updateIrsenHandRange(this)">
+            <span>Far</span>
+          </div>
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Sensor Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container wrap" id="irsenPins"></div>
+          </div>
+
+          <!-- Step 2 — this ON/OFF only controls whether the left-panel hand/
+               beam preview animation plays; ir_sen has no STATE field, so
+               unlike every other sensor's Step 2 this is never saved to the
+               block, purely a popup preview convenience. -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-power-container" id="irsenAnimPower">
+              <label class="mf-power-label">
+                <input type="radio" name="irsenAnim" value="ON" style="display:none;" checked
+                  onchange="updateIrsenAnimUI()">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="irsenAnim" value="OFF" style="display:none;" onchange="updateIrsenAnimUI()">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeSensorModal('irsen')" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveSensorSelection('irsen')" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Water Pump Modal (sensor popup template — see Minifan/IR/Relay/Load Cell modals above) -->
+  <div id="waterpumpSelectionModal" class="mf-modal-overlay">
+    <div class="mf-modal-container">
+      <!-- Header -->
+      <div class="mf-header">
+        <div class="mf-header-left">
+          <div class="mf-header-icon"
+            style="background:#E0F2FE; display:flex; align-items:center; justify-content:center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0EA5E9" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M12 2.69s5.66 5.68 8.49 9.06C22.4 14.51 22 17.66 20 19.66a8 8 0 0 1-16 0c-2-2-2.4-5.15-.49-7.91C6.34 8.37 12 2.69 12 2.69z">
+              </path>
+            </svg>
+          </div>
+          <div>
+            <h2 class="mf-header-title">Water Pump</h2>
+            <p class="mf-header-subtitle">Choose where your pump is connected</p>
+          </div>
+        </div>
+        <div class="mf-header-right">
+          <div class="mf-badge">PUMP</div>
+          <button onclick="closeSensorModal('waterpump')" class="mf-close-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="mf-body">
+        <!-- Left Panel -->
+        <div class="mf-left-panel" style="position: relative; overflow: hidden; padding: 0;">
+          <canvas id="waterpump3DCanvas" style="width:100%; height:100%; position:absolute; top:0; left:0;"></canvas>
+          <span id="waterpumpLoadMsg" class="mf-3d-load-msg" style="display:none;"></span>
+          <img id="waterpumpImage" class="mf-3d-static-image" style="display:none;" alt="">
+          <div class="mf-3d-hint"
+            style="position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;">
+            DRAG TO ROTATE &bull; SCROLL TO ZOOM
+          </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="mf-right-panel">
+          <!-- Step 1 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Where Is Your Pump Plugged In?
+              </h3>
+              <span class="mf-step-badge">STEP 1</span>
+            </div>
+            <div class="mf-pins-container wrap" id="waterpumpPins"></div>
+          </div>
+
+          <!-- Step 2 -->
+          <div>
+            <div class="mf-step-header">
+              <h3 class="mf-step-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+                Turn On Power
+              </h3>
+              <span class="mf-step-badge">STEP 2</span>
+            </div>
+            <div class="mf-power-container" id="waterpumpPower">
+              <label class="mf-power-label">
+                <input type="radio" name="waterpumpState" value="ON" style="display:none;" checked
+                  onchange="updateSensorPowerUI('waterpump')">
+                <div class="mf-pwr-box on selected">
+                  <img style="width: 15px;" src="./icons/power_on_icon.svg" alt="power on">
+                  ON
+                </div>
+              </label>
+              <label class="mf-power-label">
+                <input type="radio" name="waterpumpState" value="OFF" style="display:none;"
+                  onchange="updateSensorPowerUI('waterpump')">
+                <div class="mf-pwr-box off">
+                  <img style="width: 15px;" src="./icons/power_off_icon.svg" alt="power off">
+                  OFF
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mf-footer">
+            <button onclick="closeSensorModal('waterpump')" class="mf-btn-cancel">CANCEL</button>
+            <button onclick="saveSensorSelection('waterpump')" class="mf-btn-done">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unified Motor Modal -->
+  <div id="unifiedMotorModal"
+    style="display:none;position:fixed;inset:0;z-index:4200;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+    <div class="box-dc-popup">
+      <h3>Motor Configuration</h3>
+      <div
+        style="display:flex;flex-direction:row;width:100%;gap:20px;justify-content:space-around;align-items:flex-start;">
+        <div style="flex:0.8;border-right:2px solid #eee;padding-right:20px;">
+          <h4 style="text-align:center;">Select Ports</h4>
+          <div class="box1 motor-box1">
+            <div class="motor-box1-p1">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorE11"><label
+                  class="tgl-btn" data-tg-off="E11 OFF" data-tg-on="E11 ON" for="uni_motorE11"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorE12"><label
+                  class="tgl-btn" data-tg-off="E12" data-tg-on="E12 ON" for="uni_motorE12"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorE13"><label
+                  class="tgl-btn" data-tg-off="E13" data-tg-on="E13 ON" for="uni_motorE13"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorE14"><label
+                  class="tgl-btn" data-tg-off="E14" data-tg-on="E14 ON" for="uni_motorE14"></label></div>
+            </div>
+            <div class="motor-box1-p2">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorB8"><label
+                  class="tgl-btn" data-tg-off="B8" data-tg-on="B8 ON" for="uni_motorB8"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorB9"><label
+                  class="tgl-btn" data-tg-off="B9" data-tg-on="B9 ON" for="uni_motorB9"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorB15"><label
+                  class="tgl-btn" data-tg-off="B15" data-tg-on="B15 ON" for="uni_motorB15"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="uni_motorD15"><label
+                  class="tgl-btn" data-tg-off="D15" data-tg-on="D15 ON" for="uni_motorD15"></label></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Motor Simulation -->
+        <div class="motor3d-section" style="flex:1;border-right:2px solid #eee;padding-right:20px;">
+          <canvas id="motor3DCanvas"></canvas>
+          <div class="motor3d-speed-arrows">
+            <button class="motor3d-arrow-up" onclick="inspeed()">&#9650;</button>
+            <button class="motor3d-arrow-down" onclick="despeed()">&#9660;</button>
+          </div>
+          <p class="motor3d-label">Drag to rotate view</p>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;">
+          <h4 style="text-align:center;">Set Speed</h4>
+          <div class="speed-meter" id="speedoGauge" style="transform:scale(0.7);margin-top:-30px;margin-bottom:-30px;">
+            <div class="text-area">
+              <div class="speed-percentage">
+                <h3>Speed</h3>
+                <p id="speed-val">0<span>%</span></p>
+              </div>
+            </div>
+            <div class="center-point"></div>
+            <div class="speed-scale speed-scale-1 active"></div>
+            <div class="speed-scale speed-scale-2"></div>
+            <div class="speed-scale speed-scale-3"></div>
+            <div class="speed-scale speed-scale-4"></div>
+            <div class="speed-scale speed-scale-5"></div>
+            <div class="speed-scale speed-scale-6"></div>
+            <div class="speed-scale speed-scale-7"></div>
+            <div class="speed-bg-hide"></div>
+            <div class="speed-half-hide"></div>
+            <div class="arrow-con">
+              <div class="arrow-wrapper arrow-speed-1">
+                <div class="speed-arrow"></div>
+              </div>
+            </div>
+            <div class="inbtns">
+              <button id="btnIncrease" style="background-color:#4CAF50;">Increase</button>
+              <button id="btnDecrease" style="background-color:#F44336;">Decrease</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        style="display:flex;gap:15px;justify-content:center;margin-top:20px;border-top:1px solid #eee;padding-top:15px;">
+        <button onclick="saveUnifiedSelection()"
+          style="background:#4CAF50;color:white;padding:10px 30px;border-radius:5px;border:none;cursor:pointer;font-weight:700;">Save
+          Configuration</button>
+        <button onclick="closeUnifiedModal()"
+          style="background:#f44336;color:white;padding:10px 30px;border-radius:5px;border:none;cursor:pointer;font-weight:700;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dedicated Soil Moisture Popup Modal -->
+  <div id="soilMoisturePopupModal"
+    style="display:none;position:fixed;inset:0;z-index:4200;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;">
+    <div class="box box-motor" style="width:720px;background:#fcfcfc;">
+      <h3 style="margin-top:0;margin-bottom:15px;text-align:center;">Soil Moisture Configuration</h3>
+      <div
+        style="display:flex;flex-direction:row;width:100%;gap:20px;justify-content:space-around;align-items:flex-start;">
+        <div style="flex:0.8;border-right:2px solid #eee;padding-right:20px;">
+          <h4 style="text-align:center;">Select Ports</h4>
+          <div class="box1 motor-box1 soil-box">
+            <div class="motor-box1-p1">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_C0"><label
+                  class="tgl-btn" data-tg-off="C0" data-tg-on="C0 ON" for="soil_pop_C0"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_C1"><label
+                  class="tgl-btn" data-tg-off="C1" data-tg-on="C1 ON" for="soil_pop_C1"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_C2"><label
+                  class="tgl-btn" data-tg-off="C2" data-tg-on="C2 ON" for="soil_pop_C2"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_F9"><label
+                  class="tgl-btn" data-tg-off="F9" data-tg-on="F9 ON" for="soil_pop_F9"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_A3"><label
+                  class="tgl-btn" data-tg-off="A3" data-tg-on="A3 ON" for="soil_pop_A3"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_F3"><label
+                  class="tgl-btn" data-tg-off="F3" data-tg-on="F3 ON" for="soil_pop_F3"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_F4"><label
+                  class="tgl-btn" data-tg-off="F4" data-tg-on="F4 ON" for="soil_pop_F4"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_F5"><label
+                  class="tgl-btn" data-tg-off="F5" data-tg-on="F5 ON" for="soil_pop_F5"></label></div>
+            </div>
+            <div class="motor-box1-p2">
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_C4"><label
+                  class="tgl-btn" data-tg-off="C4" data-tg-on="C4 ON" for="soil_pop_C4"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_C5"><label
+                  class="tgl-btn" data-tg-off="C5" data-tg-on="C5 ON" for="soil_pop_C5"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_A1"><label
+                  class="tgl-btn" data-tg-off="A1" data-tg-on="A1 ON" for="soil_pop_A1"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_A2"><label
+                  class="tgl-btn" data-tg-off="A2" data-tg-on="A2 ON" for="soil_pop_A2"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_A4"><label
+                  class="tgl-btn" data-tg-off="A4" data-tg-on="A4 ON" for="soil_pop_A4"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_F8"><label
+                  class="tgl-btn" data-tg-off="F8" data-tg-on="F8 ON" for="soil_pop_F8"></label></div>
+              <div class="row checkbox-wrapper-8"><input class="tgl tgl-skewed" type="checkbox" id="soil_pop_A6"><label
+                  class="tgl-btn" data-tg-off="A6" data-tg-on="A6 ON" for="soil_pop_A6"></label></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;">
+          <h4 style="text-align:center;">Sensor Preview</h4>
+          <canvas id="soilMoisturePopupCanvas"
+            style="width:240px;height:240px;border-radius:12px;background:#fcfcfc;cursor:grab;display:block;box-shadow: 0 4px 15px rgba(0,0,0,0.1);border:1px solid #eaeaea;"></canvas>
+          <p class="soil3d-label" style="text-align:center;margin-top:10px;color:#666;font-size:11px;">Drag to rotate ·
+            Scroll to zoom</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:15px;justify-content:center;margin-top:20px;border-top:1px solid #eee;width:100%;">
+        <button onclick="saveSoilMoisturePopup()"
+          style="background:#4CAF50;color:white;padding:10px 30px;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;box-shadow:0 4px 6px rgba(0,0,0,0.1);">Save
+          Configuration</button>
+        <button onclick="closeSoilMoisturePopup()"
+          style="background:#f44336;color:white;padding:10px 30px;border:none;border-radius:10px;font-size:16px;cursor:pointer;font-weight:700;box-shadow:0 4px 6px rgba(0,0,0,0.1);">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Bike 3D Model Modal ═══ -->
+  <div id="bikeModelModal">
+    <div class="bike-card">
+      <div class="bike-header">
+        <div class="bike-header-icon">🏍️</div>
+        <div class="bike-header-text">
+          <h3>3D Bike — Increase/Decrease wheel spin speed</h3>
+          <p>Drag canvas to orbit · Use buttons to control wheel speed</p>
+        </div>
+      </div>
+      <div class="bike-body">
+        <div class="bike-canvas-wrap">
+          <canvas id="bikeCanvas"></canvas>
+          <span id="bikeLoadingMsg">Loading bike model…</span>
+        </div>
+        <div class="bike-ctrl-btns">
+          <button class="bike-btn-inc" onclick="bikeSpeedUp()">⬆ Increase</button>
+          <button class="bike-btn-dec" onclick="bikeSpeedDown()">⬇ Decrease</button>
+        </div>
+        <div class="bike-speed-row">
+          <span class="bike-speed-label">Speed</span>
+          <input type="range" id="bikeSpeedSlider" min="0" max="10" value="0"
+            style="flex:1;accent-color:#0ea5e9;height:6px;" oninput="setBikeSpeedFromSlider(+this.value)">
+          <span class="bike-speed-val" id="bikeSpeedValLabel">0 / 10</span>
+        </div>
+      </div>
+      <div class="bike-footer">
+        <button class="bike-btn-save" onclick="saveBikeModal()">Save</button>
+        <button class="bike-btn-cancel" onclick="closeBikeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BLUETOOTH MODAL -->
+  <div class="modal-overlay" id="btModal">
+    <div class="bt-popup">
+      <div class="bt-header"><i class="fa-solid fa-hexagon-nodes"></i> BLUETOOTH CONNECT</div>
+      <div class="bt-subtext">Select your STM32 board via Bluetooth</div>
+      <div class="bt-device-list" id="deviceList"></div>
+      <div class="bt-footer">
+        <button class="bt-btn" id="scanBtn" onclick="startScan()">
+          <i class="fa-solid fa-magnifying-glass"></i> SCAN
+        </button>
+        <button class="bt-btn" style="background:#e2e8f0;" onclick="closeBT()">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ADD DEVICE MODAL ══ -->
+  <div id="addDeviceModal">
+    <div class="adm-popup">
+
+      <!-- ── Title row ── -->
+      <div class="adm-header">
+        <span class="adm-title">Connect Your Device</span>
+        <button class="adm-close-btn" onclick="dpCloseAddModal()" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round" width="14" height="14">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- ── Thin divider ── -->
+      <div class="adm-divider"></div>
+
+      <!-- ── Sub-heading ── -->
+      <p class="adm-sub">Choose how you want to connect your device to continue ?</p>
+
+      <!-- ── Bluetooth card ── -->
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <div class="adm-card-title">Bluetooth</div>
+          <div class="adm-card-desc">Connect to nearby devices using Bluetooth</div>
+          <button class="adm-card-btn" onclick="dpCloseAddModal(); typeof openBT==='function' && openBT();">
+            Scan Devices
+          </button>
+        </div>
+        <div class="adm-card-img">
+          <img src="./icons/bluethooth.svg" alt="Bluetooth" />
+        </div>
+      </div>
+
+      <!-- ── "or" row ── -->
+      <div class="adm-or-row"><span>or</span></div>
+
+      <!-- ── USB card ── -->
+      <div class="adm-card">
+        <div class="adm-card-body">
+          <div class="adm-card-title">USB</div>
+          <div class="adm-card-desc">Connect to your device directly using a USB cable</div>
+          <button class="adm-card-btn" onclick="dpCloseAddModal(); typeof connectStm32==='function' && connectStm32();">
+            Connect
+          </button>
+        </div>
+        <div class="adm-card-img">
+          <img src="./icons/usb.svg" alt="USB" />
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+
+  <div id="rgbColorModal"
+    style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.6);justify-content:center;align-items:center;">
+    <div class="box rgb_box" style="width:320px;">
+      <h3 style="margin:0 0 14px;">🎨 Color Picker</h3>
+      <div id="rgbColorPreview"
+        style="width:100%;height:56px;border-radius:10px;margin-bottom:18px;border:2px solid rgba(0,0,0,0.12);transition:background-color 0.08s;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;">
+          <span>Color (Hue)</span><span id="rgbHVal">0</span>
+        </div>
+        <input type="range" id="rgbHSlider" class="rgb-slider" min="0" max="360" value="0" oninput="onRgbSliderChange()"
+          style="background:linear-gradient(to right,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%);">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;">
+          <span>Saturation</span><span id="rgbSVal">100</span>
+        </div>
+        <input type="range" id="rgbSSlider" class="rgb-slider" min="0" max="100" value="100"
+          oninput="onRgbSliderChange()" style="background:linear-gradient(to right,#aaa,#00ff00);">
+      </div>
+
+      <div style="margin-bottom:18px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;">
+          <span>Brightness</span><span id="rgbVVal">100</span>
+        </div>
+        <input type="range" id="rgbVSlider" class="rgb-slider" min="0" max="100" value="100"
+          oninput="onRgbSliderChange()" style="background:linear-gradient(to right,#000,#00ff00);">
+      </div>
+
+      <hr style="border:none;border-top:1px solid #e0e0e0;margin:0 0 14px;">
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <div id="rgbHexPreviewBox"
+          style="width:36px;height:36px;border-radius:6px;border:1px solid #ddd;flex-shrink:0;"></div>
+        <input type="text" id="rgbHexInput" readonly
+          style="flex:1;padding:8px;border-radius:6px;border:1px solid #ccc;font-family:monospace;font-size:14px;text-align:center;">
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="saveRgbColor()"
+          style="background:#9F2CBF;color:white;padding:8px 22px;border-radius:6px;border:none;cursor:pointer;font-weight:600;">Save</button>
+        <button onclick="closeRgbModal()"
+          style="background:#e2e8f0;padding:8px 22px;border-radius:6px;border:none;cursor:pointer;font-weight:600;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 3D Model Viewer Modal ═══ -->
+  <div id="threeDModal">
+    <div class="three-card">
+      <div class="three-header">
+        <div class="three-header-icon">&#x1f9ca;</div>
+        <div class="three-header-text">
+          <h3>3D Model Viewer</h3>
+          <p>Select a 3D shape and configure rotation</p>
+        </div>
+      </div>
+      <div class="three-body">
+        <div id="threeCanvas"></div>
+        <div class="three-model-grid">
+          <div class="three-model-btn active" onclick="select3DModel('cube')">Cube</div>
+          <div class="three-model-btn" onclick="select3DModel('sphere')">Sphere</div>
+          <div class="three-model-btn" onclick="select3DModel('cylinder')">Cylinder</div>
+          <div class="three-model-btn" onclick="select3DModel('cone')">Cone</div>
+          <div class="three-model-btn" onclick="select3DModel('torus')">Torus</div>
+          <div class="three-model-btn" onclick="select3DModel('robot')">Robot</div>
+        </div>
+        <div class="three-speed-row">
+          <span class="lbl">Spin Speed</span>
+          <input type="range" id="threeSpinSpeed" min="0" max="100" value="30" style="flex:1;"
+            oninput="update3DSpeed(this.value)">
+          <span class="val" id="threeSpeedLabel">30</span>
+        </div>
+        <div class="three-color-row">
+          <span class="lbl">Model Color</span>
+          <input type="color" id="threeColorPick" value="#7c3aed" oninput="update3DColor(this.value)">
+          <span style="color:#9ca3af;font-size:12px;" id="threeColorHex">#7c3aed</span>
+        </div>
+      </div>
+      <div class="three-footer">
+        <button class="three-btn-save" onclick="save3DSelection()">Save</button>
+        <button class="three-btn-cancel" onclick="close3DModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══ 3D Speedometer Modal ═══ -->
+  <div id="speedo3DModal">
+    <div class="speedo3d-card">
+      <div class="speedo3d-header">
+        <div class="speedo3d-header-icon">&#x1f3ce;</div>
+        <div class="speedo3d-header-text">
+          <h3>3D Speedometer</h3>
+          <p>Set speed value — drag on gauge or use slider</p>
+        </div>
+      </div>
+      <div class="speedo3d-body">
+        <div id="speedo3DCanvas"></div>
+        <div class="speedo3d-digital">
+          <div class="speedo3d-value" id="speedo3DValue">0</div>
+          <div class="speedo3d-unit">percent</div>
+        </div>
+        <div class="speedo3d-presets">
+          <button class="speedo3d-preset active" onclick="setSpeedo3D(0)">0%</button>
+          <button class="speedo3d-preset" onclick="setSpeedo3D(25)">25%</button>
+          <button class="speedo3d-preset" onclick="setSpeedo3D(50)">50%</button>
+          <button class="speedo3d-preset" onclick="setSpeedo3D(75)">75%</button>
+          <button class="speedo3d-preset" onclick="setSpeedo3D(100)">100%</button>
+        </div>
+        <div class="speedo3d-ctrl">
+          <span class="lbl">Speed</span>
+          <input type="range" id="speedo3DSlider" min="0" max="100" value="0" style="flex:1;accent-color:#10b981;"
+            oninput="onSpeedo3DSlider(this.value)">
+          <span class="val" id="speedo3DSliderVal">0%</span>
+        </div>
+      </div>
+      <div class="speedo3d-footer">
+        <button class="speedo3d-btn-save" onclick="saveSpeedo3D()">Save</button>
+        <button class="speedo3d-btn-cancel" onclick="closeSpeedo3D()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Three.js Simulation Modal ═══ -->
+  <div id="simModal"
+    style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(5,10,25,.75);backdrop-filter:blur(6px);justify-content:center;align-items:center">
+    <div
+      style="width:540px;border-radius:20px;overflow:hidden;background:#111827;box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;max-height:92vh">
+      <div id="simHeader"
+        style="background:linear-gradient(135deg,#f59e0b,#ef4444,#8b5cf6);padding:16px 24px;display:flex;align-items:center;gap:12px">
+        <div
+          style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:20px">
+          &#x1f9ea;</div>
+        <div>
+          <h3 id="simTitle" style="margin:0;font-size:16px;font-weight:700;color:#fff">Simulation</h3>
+          <p id="simDesc" style="margin:2px 0 0;font-size:11px;color:rgba(255,255,255,.7)">3D simulation</p>
+        </div>
+      </div>
+      <div style="padding:14px 20px;flex:1;overflow-y:auto">
+        <div id="simCanvas"
+          style="width:100%;height:300px;border-radius:14px;background:#0f172a;margin-bottom:12px;cursor:grab;touch-action:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span
+            style="color:#6b7280;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;min-width:60px">Speed</span><input
+            type="range" id="simSpeedSlider" min="0" max="100" value="50" style="flex:1;accent-color:#f59e0b"
+            oninput="onSimSpeedChange(this.value)"><span id="simSpeedVal"
+            style="color:#e2e8f0;font-size:12px;min-width:36px;text-align:right;font-family:monospace">50</span></div>
+      </div>
+      <div style="padding:10px 20px 16px;display:flex;gap:8px;justify-content:flex-end"><button onclick="saveSimModal()"
+          style="padding:9px 22px;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-size:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:white">Save</button><button
+          onclick="closeSimModal()"
+          style="padding:9px 22px;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-size:12px;background:#1f2937;color:#9ca3af">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keypad selection modal (premium redesign) -->
+  <div id="keyPinSelectionModal">
+    <div class="kp-card">
+
+      <!-- Header -->
+      <div class="kp-header">
+        <div class="kp-header-icon">⌨️</div>
+        <div class="kp-header-text">
+          <h3>Keypad Configuration</h3>
+          <p>Select the pins connected to your keypad</p>
+        </div>
+      </div>
+
+      <!-- Pin grid -->
+      <div class="kp-body">
+        <div class="kp-section-label">Available Pins</div>
+        <div class="keypad-grid">
+          <label class="kp-pin-label" for="keyPinA3"><input type="checkbox" id="keyPinA3">A3</label>
+          <label class="kp-pin-label" for="keyPinE3"><input type="checkbox" id="keyPinE3">E3</label>
+          <label class="kp-pin-label" for="keyPinE12"><input type="checkbox" id="keyPinE12">E12</label>
+          <label class="kp-pin-label" for="keyPinE11"><input type="checkbox" id="keyPinE11">E11</label>
+          <label class="kp-pin-label" for="keyPinF3"><input type="checkbox" id="keyPinF3">F3</label>
+          <label class="kp-pin-label" for="keyPinG4"><input type="checkbox" id="keyPinG4">G4</label>
+          <label class="kp-pin-label" for="keyPinC8"><input type="checkbox" id="keyPinC8">C8</label>
+          <label class="kp-pin-label" for="keyPinC9"><input type="checkbox" id="keyPinC9">C9</label>
+          <label class="kp-pin-label" for="keyPinF4"><input type="checkbox" id="keyPinF4">F4</label>
+          <label class="kp-pin-label" for="keyPinG5"><input type="checkbox" id="keyPinG5">G5</label>
+          <label class="kp-pin-label" for="keyPinB15"><input type="checkbox" id="keyPinB15">B15</label>
+          <label class="kp-pin-label" for="keyPinE13"><input type="checkbox" id="keyPinE13">E13</label>
+          <label class="kp-pin-label" for="keyPinF5"><input type="checkbox" id="keyPinF5">F5</label>
+          <label class="kp-pin-label" for="keyPinG6"><input type="checkbox" id="keyPinG6">G6</label>
+          <label class="kp-pin-label" for="keyPinE14"><input type="checkbox" id="keyPinE14">E14</label>
+          <label class="kp-pin-label" for="keyPinD15"><input type="checkbox" id="keyPinD15">D15</label>
+        </div>
+        <hr class="kp-divider">
+      </div>
+
+      <!-- Footer -->
+      <div class="kp-footer">
+        <button type="button" class="kp-btn-cancel" onclick="closekeyPinModal()">Cancel</button>
+        <button type="button" class="kp-btn-save" onclick="savekeyPinSelection()">&#10003; Save Pins</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/main/terminal-state.js?v=7" defer></script>
+  <script src="js/main/bluetooth.js?v=7" defer></script>
+  <script src="js/main/usb-serial-and-transport.js?v=7" defer></script>
+  <script src="js/main/modals.js?v=36" defer></script>
+  <script src="js/main/block-styling.js?v=7" defer></script>
+  <script src="js/main/custom-fields.js?v=7" defer></script>
+  <script src="js/main/block-definitions.js?v=7" defer></script>
+  <script src="js/main/python-generators.js?v=7" defer></script>
+  <script src="js/main/button-lock-mutex.js?v=7" defer></script>
+  <script src="js/main/training-3d-misc.js?v=7" defer></script>
+  <script src="js/main/simulation-modal.js?v=7" defer></script>
+  <script src="js/main/model-viewer-3d.js?v=7" defer></script>
+  <script src="js/main/app-init.js?v=7" defer></script>
+  <script src="js/main/live-mode-engine.js?v=7" defer></script>
+  <script src="js/main/panel-toggle-and-boot.js?v=7" defer></script>
+  <script src="js/main/cross-page-integration-1.js?v=7" defer></script>
+  <script src="js/main/bike-3d-model.js?v=7" defer></script>
+  <script src="js/main/cross-page-integration-2.js?v=7" defer></script>
+  <script src="js/main/port-label-field-patch.js?v=7" defer></script>
+  <div id="liveModeToast" class="live-toast"></div>
+
+  <!-- Hide Scrollbar CSS -->
+
+
+  <!-- Figma Toolbox Custom Floating Styles -->
+
+
+
+
+
+
+
+  <!-- Flyout Alignment Patch -->
+  <script src="js/main/flyout-patch.js?v=7" defer></script>
+
+
+  <!-- FORCE HIDE SVG SCROLLBAR -->
+
+
+  <!-- CodePanel Slide Animation CSS -->
+
+  <!-- ══ DEVICES PANEL CSS ══ -->
+
+  <!-- ══ DEVICES PANEL JS ══ -->
+  <script src="js/main/devices-panel.js?v=7" defer></script>
+
+  <script src="js/main/code-panel-tabs.js?v=7" defer></script>
+
+</body>
+
+</html>

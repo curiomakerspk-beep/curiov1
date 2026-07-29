@@ -1,0 +1,46 @@
+server {
+    listen       ${PORT};
+    server_name  localhost;
+
+    # ── Gzip compression ──────────────────────────────────────────
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        image/svg+xml
+        font/woff2;
+
+    # ── Browser caching ───────────────────────────────────────────
+    # Static assets: cache 1 year (they have versioned filenames)
+    location ~* \.(js|css|woff2|woff|ttf|svg|png|jpg|jpeg|gif|ico|glb|gltf|wasm)$ {
+        root   /usr/share/nginx/html;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # HTML: never cache (always serve fresh)
+    location ~* \.html$ {
+        root   /usr/share/nginx/html;
+        expires -1;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+    }
+
+    location / {
+        root   /usr/share/nginx/html;
+        index  index.html index.htm;
+        try_files $uri $uri/ /index.html;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
