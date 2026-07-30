@@ -51,7 +51,7 @@ function openBoardScreen() {
     window.postMessage(payload, '*');
   } else {
     // Standalone browser — go directly to the board picker
-    window.location.href = 'board.html';
+    window.location.href = 'board.html?v=' + Date.now();
   }
 }
 
@@ -91,11 +91,40 @@ function setSelectedBoard(board) {
   window._selectedBoards[board] = true;
   try { localStorage.setItem('blockly_selected_boards', JSON.stringify(Object.keys(window._selectedBoards))); } catch (e) { }
   ensureAIVisionCategory(board);
-  if (typeof workspace !== 'undefined' && workspace) {
-    try { workspace.updateToolbox(window.toolboxConfig); } catch (e) { }
-  }
+  refreshToolboxWhenReady();
 }
 window.setSelectedBoard = setSelectedBoard;
+
+// workspace can still be mid-init (Blockly.inject not finished) when
+// setSelectedBoard runs from the page-load restore below, right after a
+// board.html redirect — retrying briefly instead of silently skipping the
+// toolbox refresh closes that timing gap.
+function refreshToolboxWhenReady(attemptsLeft) {
+  if (attemptsLeft === undefined) attemptsLeft = 40; // ~2s at 50ms
+  if (typeof workspace !== 'undefined' && workspace) {
+    try { workspace.updateToolbox(window.toolboxConfig); } catch (e) { }
+    return;
+  }
+  if (attemptsLeft > 0) setTimeout(function () { refreshToolboxWhenReady(attemptsLeft - 1); }, 50);
+}
+
+// Restore any previously-picked boards (if any) so their categories
+// survive reloads. Falls back to the old singular key for migration.
+// Also checks the URL's ?board= param — set by board.html's standalone-
+// browser redirect — since localStorage can silently fail to persist
+// across that navigation on some mobile/private browsers.
+(function restoreSelectedBoards() {
+  try {
+    var _savedBoards = JSON.parse(localStorage.getItem('blockly_selected_boards') || 'null');
+    if (!_savedBoards) {
+      var _legacyBoard = localStorage.getItem('blockly_selected_board');
+      _savedBoards = _legacyBoard ? [_legacyBoard] : [];
+    }
+    var _urlBoard = new URLSearchParams(window.location.search).get('board');
+    if (_urlBoard && _savedBoards.indexOf(_urlBoard) === -1) _savedBoards.push(_urlBoard);
+    _savedBoards.forEach(function (b) { setSelectedBoard(b); });
+  } catch (e) { }
+})();
 
 // ── AI_MODEL_TRAINED — inject trained blocks into A.I. Vision category ─
 

@@ -7,6 +7,7 @@
     <title>Model Training — MobileNet V3</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -94,9 +95,7 @@
             white-space: nowrap;
         }
 
-        .class-dl-btn:hover {
-            background: #dcfce7;
-        }
+        .class-dl-btn:hover { background: #dcfce7; }
 
         .deploy-btn:disabled {
             opacity: 0.4;
@@ -381,13 +380,8 @@
             transition: opacity 0.15s;
         }
 
-        .auto-cap-btn:hover {
-            opacity: 0.85;
-        }
-
-        .auto-cap-btn.running {
-            background: #f59e0b;
-        }
+        .auto-cap-btn:hover { opacity: 0.85; }
+        .auto-cap-btn.running { background: #f59e0b; }
 
         .thumbs {
             display: flex;
@@ -884,9 +878,7 @@
             border: 1px solid #4c1d95;
         }
 
-        .serial-panel.active {
-            display: block;
-        }
+        .serial-panel.active { display: block; }
 
         .serial-bar {
             display: flex;
@@ -905,9 +897,7 @@
             transition: background 0.3s;
         }
 
-        .serial-dot.connected {
-            background: #4ade80;
-        }
+        .serial-dot.connected { background: #4ade80; }
 
         .serial-log {
             display: none;
@@ -923,9 +913,7 @@
             white-space: pre-wrap;
         }
 
-        .serial-log.active {
-            display: block;
-        }
+        .serial-log.active { display: block; }
 
         .btn-deploy-k230 {
             background: #f59e0b;
@@ -956,55 +944,6 @@
             outline: none;
             color: #1e293b;
             font-weight: 600;
-        }
-
-        .k230-mini-btn {
-            border: 1px solid #cbd5e1;
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 11px;
-            cursor: pointer;
-            background: #fff;
-            color: #1e293b;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .k230-mini-btn:hover {
-            background: #f1f5f9;
-        }
-
-        .k230-mini-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .k230-mini-detect {
-            color: #16a34a;
-            border-color: #86efac;
-        }
-
-        .k230-mini-ping {
-            color: #2563eb;
-            border-color: #93c5fd;
-        }
-
-        .k230-online-status {
-            font-size: 11px;
-            margin: 4px 0 4px 8px;
-            min-height: 14px;
-        }
-
-        .k230-online-status.ok {
-            color: #16a34a;
-        }
-
-        .k230-online-status.err {
-            color: #ef4444;
-        }
-
-        .k230-online-status.chk {
-            color: #64748b;
         }
 
         .action-wrap {
@@ -1046,121 +985,111 @@
             margin-top: 10px;
             border: 1px solid #1e293b;
         }
-
-        .usb-progress-panel.visible {
-            display: block;
-        }
-
+        .usb-progress-panel.visible { display: block; }
         .usb-progress-title {
-            font-size: 11px;
-            font-weight: 700;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            font-size: 11px; font-weight: 700; color: #64748b;
+            text-transform: uppercase; letter-spacing: .06em;
+            margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
         }
-
-        .usb-file-row {
-            margin-bottom: 8px;
-        }
-
+        .usb-file-row { margin-bottom: 8px; }
         .usb-file-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: #94a3b8;
-            margin-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
+            font-size: 11px; font-weight: 600; color: #94a3b8;
+            margin-bottom: 4px; display: flex; justify-content: space-between;
         }
-
-        .usb-file-label span:last-child {
-            color: #f59e0b;
-            font-family: monospace;
-        }
-
+        .usb-file-label span:last-child { color: #f59e0b; font-family: monospace; }
         .usb-file-bar {
-            width: 100%;
-            height: 5px;
-            background: #1e293b;
-            border-radius: 3px;
-            overflow: hidden;
+            width: 100%; height: 5px; background: #1e293b;
+            border-radius: 3px; overflow: hidden;
         }
-
         .usb-file-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width .1s linear;
-            width: 0%;
+            height: 100%; border-radius: 3px;
+            transition: width .1s linear; width: 0%;
         }
-
         .usb-log {
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            color: #475569;
-            margin-top: 8px;
-            line-height: 1.7;
-            max-height: 60px;
-            overflow-y: auto;
+            font-family: 'Courier New', monospace; font-size: 10px;
+            color: #475569; margin-top: 8px; line-height: 1.7;
+            max-height: 60px; overflow-y: auto;
         }
-
-        .usb-log .ok {
-            color: #10b981;
-        }
-
-        .usb-log .err {
-            color: #ef4444;
-        }
-
-        .usb-log .warn {
-            color: #f59e0b;
-        }
-
-        .usb-log .info {
-            color: #38bdf8;
-        }
+        .usb-log .ok { color: #10b981; }
+        .usb-log .err { color: #ef4444; }
+        .usb-log .warn { color: #f59e0b; }
+        .usb-log .info { color: #38bdf8; }
 
         /* ── WebSerial unsupported notice ─────────────────────── */
         .serial-warn {
-            display: none;
-            background: #fff7ed;
-            border: 1px solid #fed7aa;
-            border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 11px;
-            color: #9a3412;
-            margin-top: 8px;
-            line-height: 1.6;
+            display: none; background: #fff7ed;
+            border: 1px solid #fed7aa; border-radius: 6px;
+            padding: 8px 12px; font-size: 11px; color: #9a3412;
+            margin-top: 8px; line-height: 1.6;
         }
+        .serial-warn.show { display: block; }
 
-        .serial-warn.show {
-            display: block;
+        .qr-transfer-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            background: rgba(15, 23, 42, .76);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .qr-transfer-card {
+            width: min(96vw, 620px);
+            max-height: 94vh;
+            overflow: auto;
+            border-radius: 20px;
+            background: #fff;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .35);
+        }
+        .qr-transfer-card h2 { color: #0f172a; margin-bottom: 6px; }
+        .qr-transfer-card p { color: #64748b; font-size: 13px; line-height: 1.55; }
+        .qr-code-box {
+            display: inline-flex;
+            min-width: 476px;
+            min-height: 476px;
+            align-items: center;
+            justify-content: center;
+            margin: 18px auto;
+            padding: 28px;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            background: #fff;
+        }
+        .qr-code-box img, .qr-code-box canvas { display: block; }
+        .qr-transfer-url {
+            padding: 9px 11px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #475569;
+            font: 11px/1.4 monospace;
+            word-break: break-all;
+            text-align: left;
+        }
+        .qr-close-btn {
+            width: 100%;
+            margin-top: 14px;
+            border: 0;
+            border-radius: 10px;
+            padding: 11px;
+            background: #0f172a;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
         }
 
         /* ── Pulse dot ────────────────────────────────────────── */
         .pulse-dot {
-            display: inline-block;
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #f59e0b;
+            display: inline-block; width: 7px; height: 7px;
+            border-radius: 50%; background: #f59e0b;
             animation: pulseD 1.4s ease infinite;
         }
-
         @keyframes pulseD {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: .4;
-                transform: scale(.7);
-            }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50%       { opacity: .4; transform: scale(.7); }
         }
     </style>
 </head>
@@ -1266,13 +1195,11 @@
                                font-size:12px;margin-top:0">
                             Webcam
                         </button>
-                        <button class="action-btn btn-test-k230" id="k230TestBtn" onclick="toggleK230TestCamera()"
-                            disabled style="width:auto;padding:6px 10px;
+                        <button class="action-btn btn-test-k230" id="k230TestBtn" onclick="toggleK230TestCamera()" disabled style="width:auto;padding:6px 10px;
                                font-size:12px;margin-top:0">
                             K230 Cam
                         </button>
-                        <button class="action-btn btn-test-esp32" id="esp32TestBtn" onclick="toggleEsp32TestCamera()"
-                            disabled style="width:auto;padding:6px 10px;
+                        <button class="action-btn btn-test-esp32" id="esp32TestBtn" onclick="toggleEsp32TestCamera()" disabled style="width:auto;padding:6px 10px;
                                font-size:12px;margin-top:0">
                             ESP32-S3 Cam
                         </button>
@@ -1288,8 +1215,8 @@
                         </div>
                     </div>
                     <video id="testVideo" class="test-video" autoplay playsinline muted></video>
-                    <img id="k230TestImg" class="test-video k230-test-video" alt="K230 camera preview" />
-                    <img id="esp32TestImg" class="test-video esp32-test-video" alt="ESP32-S3 camera preview" />
+                    <img id="k230TestImg" class="test-video k230-test-video" alt="K230 camera preview"/>
+                    <img id="esp32TestImg" class="test-video esp32-test-video" alt="ESP32-S3 camera preview"/>
                 </div>
 
                 <div class="detect-status" id="detectStatus">
@@ -1338,16 +1265,13 @@
                     <button class="action-btn btn-export-esp32" id="exportEsp32Btn" onclick="exportTflite()" disabled>
                         Export .tflite (ESP32-S3)
                     </button>
-                    <button class="action-btn btn-export-arduino" id="exportArduinoBtn" onclick="exportArduinoZip()"
-                        disabled>
+                    <button class="action-btn btn-export-arduino" id="exportArduinoBtn" onclick="exportArduinoZip()" disabled>
                         📦 Export Arduino ZIP (9 files)
                     </button>
-                    <button class="action-btn btn-export-tm" id="exportTmZipBtn" onclick="exportTeachableMachineZip()"
-                        disabled>
+                    <button class="action-btn btn-export-tm" id="exportTmZipBtn" onclick="exportTeachableMachineZip()" disabled>
                         🎓 Teachable Machine ZIP
                     </button>
-                    <button class="action-btn btn-train-mnv3" id="trainMnv3Btn" onclick="exportMobileNetV3Tflite()"
-                        disabled>
+                    <button class="action-btn btn-train-mnv3" id="trainMnv3Btn" onclick="exportMobileNetV3Tflite()" disabled>
                         🐍 MobileNetV3 .tflite (Python)
                     </button>
                     <button class="action-btn btn-deploy-esp32" id="deployEsp32Btn" onclick="deployToEsp32()" disabled>
@@ -1368,7 +1292,8 @@
                     <!-- Backend URL (used by camera polling + deploy) -->
                     <div style="display:flex;align-items:center;gap:5px;margin-top:10px;">
                         <span style="font-size:12px;color:#64748b;white-space:nowrap;">Backend URL:</span>
-                        <input type="text" class="k230-input" id="backendUrlInput" style="width:250px;"
+                        <input type="text" class="k230-input" id="backendUrlInput"
+                            style="width:250px;"
                             title="Backend URL — auto-detected from page origin">
                     </div>
 
@@ -1378,36 +1303,45 @@
                             <span>Method:</span>
                             <select class="k230-select" id="deployMethodInput"
                                 onchange="onDeployMethodChange(this.value)">
-                                <option value="online">🌐 Online Wi-Fi</option>
                                 <option value="wifi" selected>Wi-Fi</option>
                                 <option value="usb">USB (WebSerial)</option>
+                                <option value="qr">QR Code (camera scan)</option>
                             </select>
                         </div>
                         <div class="k230-row" id="wifiRow">
                             <span>K230 IP:</span>
-                            <input type="text" class="k230-input" id="k230IpInput" value="192.168.4.1"
-                                style="width:110px;">
+                            <input type="text" class="k230-input" id="k230IpInput" value="192.168.4.1" style="width:110px;">
                             <span>Port:</span>
                             <input type="text" class="k230-input" id="k230PortInput" value="8080" style="width:50px;">
                         </div>
-                        <div class="k230-row" id="onlineWifiRow" style="display:none;">
-                            <span>Board IP:</span>
-                            <input type="text" class="k230-input" id="onlineIpInput" value="192.168.0.128"
-                                style="width:110px;">
-                            <span>Port:</span>
-                            <input type="text" class="k230-input" id="onlinePortInput" value="8080" style="width:50px;">
-                            <button class="k230-mini-btn k230-mini-detect" id="onlineDetectBtn"
-                                onclick="autoDetectOnlineK230()">Auto-Detect</button>
-                            <button class="k230-mini-btn k230-mini-ping" id="onlinePingBtn"
-                                onclick="pingOnlineK230()">Ping</button>
-                        </div>
-                        <div class="k230-online-status" id="onlinePingStatus"></div>
                         <div class="k230-row" id="usbBaudRow" style="display:none;">
                             <span>Baud:</span>
                             <select class="k230-select" id="usbBaudSelect">
                                 <option value="115200">115200 — safe</option>
                                 <option value="921600" selected>921600 — fast</option>
                             </select>
+                        </div>
+                        <div id="qrRow" style="display:none;flex-direction:column;gap:6px;width:100%;">
+                            <div class="k230-row">
+                                <span>Wi-Fi SSID:</span>
+                                <input type="text" class="k230-input" id="qrWifiSsidInput"
+                                    placeholder="Network used by this PC" style="width:170px;">
+                            </div>
+                            <div class="k230-row">
+                                <span>Password:</span>
+                                <input type="password" class="k230-input" id="qrWifiPasswordInput"
+                                    placeholder="Wi-Fi password" style="width:170px;">
+                            </div>
+                            <div class="k230-row">
+                                <span>K230 Download URL:</span>
+                                <input type="text" class="k230-input" id="qrDownloadUrlInput"
+                                    value="http://192.168.0.19:5001"
+                                    placeholder="http://PC-WIFI-IP:5001" style="width:190px;">
+                            </div>
+                            <div style="font-size:11px;color:#64748b;line-height:1.4;">
+                                Keep Backend URL above on Cloudflare HTTPS. This download URL must
+                                use the PC's Wi-Fi IPv4 address because the K230 cannot open localhost.
+                            </div>
                         </div>
                     </div>
 
@@ -1443,15 +1377,12 @@
 
                     <p class="hint">
                         <b>Deploy to Blockly</b> adds AI blocks.<br>
-                        <b>Deploy to K230</b> pushes model directly to board.<br>
+                        <b>Deploy to K230</b> supports Wi-Fi, USB, or a QR download ticket.<br>
                         <b>Reset K230 Board</b> restarts the board through USB after deployment.<br>
                         <b>Export .kmodel</b> / <b>.tflite</b> downloads model locally.<br>
-                        <b>Export Arduino ZIP</b> downloads 9 ready-to-flash Arduino files and auto-deploys to DFR1154
-                        via Serial (Chrome/Edge only — a port picker appears first).<br>
-                        <b>Teachable Machine ZIP</b> downloads the same 9-file Arduino export Teachable Machine produces
-                        (converted_tinyml.zip, INT8 TFLite as C array).<br>
-                        <b>Deploy to ESP32 (WebSerial)</b> trains the MobileNetV3 model on the backend and streams it to
-                        the DFR1154 over Serial (model + labels + LOAD).<br>
+                        <b>Export Arduino ZIP</b> downloads 9 ready-to-flash Arduino files and auto-deploys to DFR1154 via Serial (Chrome/Edge only — a port picker appears first).<br>
+                        <b>Teachable Machine ZIP</b> downloads the same 9-file Arduino export Teachable Machine produces (converted_tinyml.zip, INT8 TFLite as C array).<br>
+                        <b>Deploy to ESP32 (WebSerial)</b> trains the MobileNetV3 model on the backend and streams it to the DFR1154 over Serial (model + labels + LOAD).<br>
                         <b>Reset ESP32-S3 Board</b> restarts updated DFR1154 firmware through USB.
                     </p>
                 </div>
@@ -1461,35 +1392,40 @@
 
     </div>
 
+    <div class="qr-transfer-modal" id="qrTransferModal">
+        <div class="qr-transfer-card">
+            <h2>Scan on K230</h2>
+            <p>
+                On the K230 launcher, open <b>QR File Transfer</b>, then point its
+                camera at this code. Keep this backend and Wi-Fi running until all
+                three files are downloaded.
+            </p>
+            <div class="qr-code-box" id="qrCodeBox"></div>
+            <p id="qrTransferExpiry" style="margin-bottom:10px;"></p>
+            <div class="qr-transfer-url" id="qrTransferUrl"></div>
+            <button class="qr-close-btn" onclick="closeQrTransferModal()">Close</button>
+        </div>
+    </div>
+
     <!-- Beautiful modern popup modal for ESP32 RST guidance -->
-    <div id="rstModal"
-        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.7); backdrop-filter:blur(4px); z-index:99999; justify-content:center; align-items:center; transition: opacity 0.3s ease;">
-        <div
-            style="background:#ffffff; border-radius:20px; max-width:440px; width:90%; padding:30px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); border:1px solid #f1f5f9; text-align:center;">
-            <div
-                style="background:#fef9c3; border-radius:50%; width:60px; height:60px; display:flex; align-items:center; justify-content:center; margin:0 auto 20px;">
+    <div id="rstModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.7); backdrop-filter:blur(4px); z-index:99999; justify-content:center; align-items:center; transition: opacity 0.3s ease;">
+        <div style="background:#ffffff; border-radius:20px; max-width:440px; width:90%; padding:30px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); border:1px solid #f1f5f9; text-align:center;">
+            <div style="background:#fef9c3; border-radius:50%; width:60px; height:60px; display:flex; align-items:center; justify-content:center; margin:0 auto 20px;">
                 <span style="font-size:28px;">🔌</span>
             </div>
-            <h3
-                style="margin-bottom:12px; color:#0f172a; font-size:20px; font-weight:800; font-family:system-ui, -apple-system, sans-serif;">
-                Prepare ESP32 Board</h3>
-            <p
-                style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.6; font-family:system-ui, -apple-system, sans-serif; text-align:left;">
-                Your 19 KB model is trained and ready! To prevent the board from starting its old model and locking the
-                connection, please follow these steps:
+            <h3 style="margin-bottom:12px; color:#0f172a; font-size:20px; font-weight:800; font-family:system-ui, -apple-system, sans-serif;">Prepare ESP32 Board</h3>
+            <p style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.6; font-family:system-ui, -apple-system, sans-serif; text-align:left;">
+                Your 19 KB model is trained and ready! To prevent the board from starting its old model and locking the connection, please follow these steps:
                 <br><br>
-                1. <strong>Press and release</strong> the physical <strong>RST (Reset)</strong> button on your board
-                now.
+                1. <strong>Press and release</strong> the physical <strong>RST (Reset)</strong> button on your board now.
                 <br>
                 2. Click <strong>Connect & Upload</strong> below immediately!
             </p>
             <div style="display:flex; gap:12px;">
-                <button id="rstCancelBtn"
-                    style="flex:1; background:#f1f5f9; color:#475569; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; transition: background 0.2s;">
+                <button id="rstCancelBtn" style="flex:1; background:#f1f5f9; color:#475569; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; transition: background 0.2s;">
                     Cancel
                 </button>
-                <button id="rstModalBtn"
-                    style="flex:2; background:#eab308; color:#fff; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; transition: background 0.2s; box-shadow:0 4px 6px -1px rgba(234,179,8,0.3);">
+                <button id="rstModalBtn" style="flex:2; background:#eab308; color:#fff; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:14px; transition: background 0.2s; box-shadow:0 4px 6px -1px rgba(234,179,8,0.3);">
                     Connect & Upload
                 </button>
             </div>
@@ -1500,80 +1436,51 @@
         'use strict';
 
         // Auto-detect backend URL from the origin this page was served from.
-        // For local Wi-Fi, Expo runs on the host's IP (e.g., 192.168.x.x).
-        // The backend agent runs on the same IP on port 5002.
+        // If served via Cloudflare tunnel or the windows agent (port 5002) → use origin.
+        // If served via Expo dev server (port 8081) or any other non-backend origin → use Docker directly on port 5001.
         (function () {
-            const hostname = window.location.hostname;
-            document.getElementById('backendUrlInput').value = `http://${hostname || '127.0.0.1'}:5001`;
+            const origin = window.location.origin;
+            const isCloudflare = origin && origin.includes('trycloudflare.com');
+            const isWindowsAgent = origin && origin.includes('localhost:5002');
+            let url;
+            if (isCloudflare || isWindowsAgent) {
+                url = origin; // real backend origin — use as-is
+            } else {
+                url = 'http://localhost:5001'; // Expo / file / other — default to Docker compiler directly
+            }
+            document.getElementById('backendUrlInput').value = url;
+            document.getElementById('qrWifiSsidInput').value =
+                localStorage.getItem('curio_qr_wifi_ssid') || '';
+            document.getElementById('qrDownloadUrlInput').value =
+                localStorage.getItem('curio_qr_download_url') ||
+                document.getElementById('qrDownloadUrlInput').value;
         })();
 
         function getBackendUrl() {
             const input = document.getElementById('backendUrlInput');
-            let url = input?.value?.trim() || `http://${window.location.hostname || '127.0.0.1'}:5001`;
+            let url = input?.value?.trim() || window.location.origin || 'http://localhost:5002';
             if (url.endsWith('/')) url = url.slice(0, -1);
             return url;
-        }
-
-        async function backendErrMessage(resp) {
-            const text = await resp.text().catch(() => null);
-            let message = `Server error ${resp.status}`;
-            if (text) {
-                try {
-                    const body = JSON.parse(text);
-                    message = body.error || text;
-                } catch {
-                    message = text;
-                }
-            }
-            return message;
         }
 
         async function postToBackend(endpoint, formData) {
             const backendUrl = getBackendUrl();
             const url = `${backendUrl}/${endpoint}`;
             try {
-                // Conversions/training run for minutes, but free Cloudflare
-                // tunnels abort any request longer than ~100 s (error 524).
-                // So: submit as a background job, poll, then fetch the result
-                // — every individual request stays fast.
-                const submitResp = await fetch(`${backendUrl}/submit/${endpoint}`,
-                    { method: 'POST', body: formData }).catch(() => null);
-
-                if (!submitResp || submitResp.status === 404 || submitResp.status === 405) {
-                    // Backend without job support (e.g. Docker compiler on :5001) — post directly.
-                    const resp = await fetch(url, { method: 'POST', body: formData });
-                    if (!resp.ok) throw new Error(await backendErrMessage(resp));
-                    return resp;
-                }
-                if (!submitResp.ok) throw new Error(await backendErrMessage(submitResp));
-
-                const { job_id } = await submitResp.json();
-                const started = Date.now();
-                let pollFailures = 0;
-                while (true) {
-                    await new Promise(r => setTimeout(r, 2500));
-                    if (Date.now() - started > 20 * 60 * 1000) {
-                        throw new Error('Timed out after 20 minutes waiting for the backend job.');
-                    }
-                    let state;
-                    try {
-                        const stResp = await fetch(`${backendUrl}/job/${job_id}`);
-                        if (!stResp.ok) throw new Error(`status ${stResp.status}`);
-                        state = await stResp.json();
-                        pollFailures = 0;
-                    } catch (pollErr) {
-                        // Tolerate a few dropped polls (tunnel hiccups, busy agent)
-                        if (++pollFailures >= 8) {
-                            throw new Error(`Lost contact with backend: ${pollErr.message}`);
+                const resp = await fetch(url, { method: 'POST', body: formData });
+                if (!resp.ok) {
+                    const text = await resp.text().catch(() => null);
+                    let message = `Server error ${resp.status}`;
+                    if (text) {
+                        try {
+                            const body = JSON.parse(text);
+                            message = body.error || text;
+                        } catch {
+                            message = text;
                         }
-                        continue;
                     }
-                    if (state.status === 'error') throw new Error(state.error || 'Backend job failed.');
-                    if (state.status === 'done') break;
+                    throw new Error(message);
                 }
-
-                const resp = await fetch(`${backendUrl}/job/${job_id}/result`);
-                if (!resp.ok) throw new Error(await backendErrMessage(resp));
                 return resp;
             } catch (err) {
                 throw new Error(`Backend request failed: ${url} — ${err.message}`);
@@ -1588,7 +1495,7 @@
         let CROP_SIZE = 224; // default: fast
 
         const CROP_BADGE_MAP = {
-            96: { label: 'Tiny', cls: 'badge-96' },
+             96: { label: 'Tiny', cls: 'badge-96' },
             224: { label: 'Fast', cls: 'badge-224' },
             320: { label: 'Balanced', cls: 'badge-320' },
             480: { label: 'Sharp', cls: 'badge-480' },
@@ -1717,93 +1624,11 @@
         // ── Deploy method toggle ──────────────────────────────────────
         function onDeployMethodChange(val) {
             document.getElementById('wifiRow').style.display = val === 'wifi' ? 'flex' : 'none';
-            document.getElementById('onlineWifiRow').style.display = val === 'online' ? 'flex' : 'none';
             document.getElementById('usbBaudRow').style.display = val === 'usb' ? 'flex' : 'none';
+            document.getElementById('qrRow').style.display = val === 'qr' ? 'flex' : 'none';
             document.getElementById('serialWarn').classList.toggle('show', val === 'usb' && !SERIAL_SUPPORTED);
             if (val !== 'usb') showUsbPanel(false);
         }
-
-        // ── Online Wi-Fi (board on existing router network) ───────────
-        function onlineUrl(path) {
-            const ip = document.getElementById('onlineIpInput').value.trim();
-            const pt = document.getElementById('onlinePortInput').value.trim() || '8080';
-            return `http://${ip}:${pt}${path}`;
-        }
-
-        async function pingOnlineK230() {
-            const statusEl = document.getElementById('onlinePingStatus');
-            const ip = document.getElementById('onlineIpInput').value.trim();
-            if (!ip) { statusEl.className = 'k230-online-status err'; statusEl.textContent = 'Enter board IP first.'; return; }
-            statusEl.className = 'k230-online-status chk'; statusEl.textContent = 'Pinging...';
-            try {
-                await fetch(onlineUrl('/'), { method: 'GET', signal: AbortSignal.timeout(5000) });
-                statusEl.className = 'k230-online-status ok'; statusEl.textContent = 'Board reachable at ' + ip;
-            } catch (e) {
-                statusEl.className = 'k230-online-status err'; statusEl.textContent = 'Not reachable. Check IP / Wi-Fi.';
-            }
-        }
-
-        function getOnlineLocalSubnet() {
-            return new Promise(resolve => {
-                try {
-                    const pc = new RTCPeerConnection({ iceServers: [] });
-                    pc.createDataChannel('');
-                    pc.createOffer().then(o => pc.setLocalDescription(o));
-                    pc.onicecandidate = e => {
-                        if (!e || !e.candidate) return;
-                        const m = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
-                        if (m) { pc.close(); resolve(m[1]); }
-                    };
-                    setTimeout(() => resolve(null), 3000);
-                } catch (e) { resolve(null); }
-            });
-        }
-
-        async function autoDetectOnlineK230() {
-            const detectBtn = document.getElementById('onlineDetectBtn');
-            const pingBtn = document.getElementById('onlinePingBtn');
-            const statusEl = document.getElementById('onlinePingStatus');
-            const pt = document.getElementById('onlinePortInput').value.trim() || '8080';
-            detectBtn.disabled = true; pingBtn.disabled = true; detectBtn.textContent = 'Scanning...';
-            statusEl.className = 'k230-online-status chk'; statusEl.textContent = 'Detecting local subnet...';
-
-            const subnet = await getOnlineLocalSubnet();
-            if (!subnet) {
-                statusEl.className = 'k230-online-status err'; statusEl.textContent = 'Could not detect subnet. Enter IP manually.';
-                detectBtn.disabled = false; pingBtn.disabled = false; detectBtn.textContent = 'Auto-Detect';
-                return;
-            }
-            statusEl.textContent = `Scanning ${subnet}.1–254 on port ${pt}...`;
-
-            const probes = [];
-            for (let i = 1; i <= 254; i++) {
-                const ip = `${subnet}.${i}`;
-                probes.push(
-                    fetch(`http://${ip}:${pt}/`, { method: 'GET', signal: AbortSignal.timeout(1500) })
-                        .then(r => (r.ok || r.status === 404) ? ip : null)
-                        .catch(() => null)
-                );
-            }
-            const results = await Promise.all(probes);
-            const found = results.find(r => r !== null);
-            if (found) {
-                document.getElementById('onlineIpInput').value = found;
-                localStorage.setItem('k230_online_ip', found);
-                statusEl.className = 'k230-online-status ok'; statusEl.textContent = 'K230 found at ' + found;
-            } else {
-                statusEl.className = 'k230-online-status err'; statusEl.textContent = 'K230 not found on this network.';
-            }
-            detectBtn.disabled = false; pingBtn.disabled = false; detectBtn.textContent = 'Auto-Detect';
-        }
-
-        // persist online IP across sessions
-        (function () {
-            const el = document.getElementById('onlineIpInput');
-            if (!el) return;
-            const saved = localStorage.getItem('k230_online_ip');
-            if (saved) el.value = saved;
-            el.addEventListener('change', () => localStorage.setItem('k230_online_ip', el.value.trim()));
-        })();
 
         function updateCropSize(val) {
             CROP_SIZE = parseInt(val);
@@ -1903,26 +1728,26 @@
         // Two commands exist: PREVIEW returns the full-quality color frame
         // (used for the live view) and CAPTURE returns the 96×96 grayscale
         // model view (used for training samples, matching model input).
-        let esp32CamIdx = null;   // class index using ESP32-S3 cam
-        let esp32Port = null;   // WebSerial port object (ESP32-S3)
-        let esp32Writer = null;
-        let esp32Reader = null;
-        let esp32ClosePromise = Promise.resolve();
-        let esp32Running = false;
-        let esp32LineBuf = '';
-        let esp32ImageActive = false;
-        let esp32ImageB64 = '';
-        let esp32Busy = false;
-        let esp32PollTimer = null;
+        let esp32CamIdx         = null;   // class index using ESP32-S3 cam
+        let esp32Port           = null;   // WebSerial port object (ESP32-S3)
+        let esp32Writer         = null;
+        let esp32Reader         = null;
+        let esp32ClosePromise   = Promise.resolve();
+        let esp32Running        = false;
+        let esp32LineBuf        = '';
+        let esp32ImageActive    = false;
+        let esp32ImageB64       = '';
+        let esp32Busy           = false;
+        let esp32PollTimer      = null;
         let esp32CaptureTimeout = null;
-        let esp32LatestFrame = null;   // data URL of latest ESP32-S3 display/model-view JPEG
-        let esp32FrameSeq = 0;      // increments whenever a new ESP32-S3 frame arrives
-        let esp32TestActive = false;
+        let esp32LatestFrame    = null;   // data URL of latest ESP32-S3 display/model-view JPEG
+        let esp32FrameSeq       = 0;      // increments whenever a new ESP32-S3 frame arrives
+        let esp32TestActive     = false;
         let esp32TestLastPredictedSeq = -1;
-        let esp32HoldTimer = null;
-        let esp32InFlightCmd = null;   // 'PREVIEW' or 'CAPTURE' awaiting a response
+        let esp32HoldTimer      = null;
+        let esp32InFlightCmd    = null;   // 'PREVIEW' or 'CAPTURE' awaiting a response
         let esp32PendingCaptures = [];    // class idxs waiting for a 96×96 model-view sample
-        let lastEsp32UsbPort = null;   // reuse the authorized DFR1154 port across camera/deploy/reset
+        let lastEsp32UsbPort    = null;   // reuse the authorized DFR1154 port across camera/deploy/reset
 
         // Auto-capture N samples automatically — keyed by class idx so
         // different classes can run one each concurrently.
@@ -2721,22 +2546,63 @@
                 "try: MediaManager.deinit()",
                 "except: pass",
                 "time.sleep(0.3)",
-                "try:",
-                "    sensor = Sensor()",
-                "    sensor.reset()",
-                "except:",
-                "    pass",
-                "try:",
-                "    sensor.set_framesize(width=320, height=240, chn=CAM_CHN_ID_0)",
-                "    sensor.set_pixformat(PIXEL_FORMAT_RGB_565, chn=CAM_CHN_ID_0)",
-                "    _use_chn = True",
-                "except Exception:",
-                "    sensor.set_framesize(width=320, height=240)",
-                "    sensor.set_pixformat(Sensor.RGB565)",
-                "    _use_chn = False",
-                "MediaManager.init()",
-                "sensor.run()",
-                "time.sleep(0.5)",
+                // Probe the camera ports in order: main (board default CSI),
+                // then CAM0, then CAM1. A dead port can still pass reset(), so
+                // each candidate must deliver one real frame before we accept
+                // it, and MediaManager must be deinit'd between attempts or the
+                // next MediaManager.init() fails.
+                "sensor = None",
+                "_use_chn = True",
+                "_cam_id = None",
+                "_af_enabled = False",
+                "def _try_cam(cid):",
+                "    global sensor, _use_chn, _af_enabled",
+                "    s = None",
+                "    af = False",
+                "    try:",
+                "        s = Sensor() if cid is None else Sensor(id=cid)",
+                "        s.reset()",
+                "        if cid == 0:",
+                "            try:",
+                "                s.auto_focus(True)",
+                "                af = True",
+                "            except Exception as af_error:",
+                "                print('AF_FAIL:' + str(af_error))",
+                "        try:",
+                "            s.set_framesize(width=320, height=240, chn=CAM_CHN_ID_0)",
+                "            s.set_pixformat(PIXEL_FORMAT_RGB_565, chn=CAM_CHN_ID_0)",
+                "            uc = True",
+                "        except Exception:",
+                "            s.set_framesize(width=320, height=240)",
+                "            s.set_pixformat(Sensor.RGB565)",
+                "            uc = False",
+                "        MediaManager.init()",
+                "        s.run()",
+                "        time.sleep(0.5)",
+                "        img = s.snapshot(chn=CAM_CHN_ID_0) if uc else s.snapshot()",
+                "        if img is None or img == -1:",
+                "            raise OSError('no frame')",
+                "        sensor = s",
+                "        _use_chn = uc",
+                "        _af_enabled = af",
+                "        return True",
+                "    except Exception as e:",
+                "        print('CAM_TRY_FAIL:' + str(cid) + ':' + str(e))",
+                "        try: s.stop()",
+                "        except: pass",
+                "        try: MediaManager.deinit()",
+                "        except: pass",
+                "        time.sleep(0.5)",
+                "        return False",
+                "for _cid in (None, 0, 1):",
+                "    if _try_cam(_cid):",
+                "        _cam_id = _cid",
+                "        break",
+                "if sensor is None:",
+                "    print('INIT_ERR:no camera found on main/cam0/cam1')",
+                "    raise SystemExit",
+                "print('CAM_ID:' + ('main' if _cam_id is None else 'cam' + str(_cam_id)))",
+                "print('AF_STATUS:' + ('enabled' if _af_enabled else 'off'))",
                 "print('CAM_READY')",
                 "while True:",
                 "    try:",
@@ -2802,14 +2668,37 @@
                             if (buf.length > 300000) buf = '';
                         }
 
-                        if (buf.includes('CAM_READY')) { setStatus('K230 camera ready…'); buf = buf.replace(/CAM_READY/g, ''); }
-                        if (buf.includes('BOOT_OK')) { setStatus('K230 booted, starting camera…'); buf = buf.replace(/BOOT_OK/g, ''); }
-                        if (buf.includes('INIT_ERR')) { setStatus('K230 camera init error — check hardware.'); }
+                        // Which port the board settled on (main / cam0 / cam1).
+                        // Match the trailing newline so a token split across two
+                        // serial reads is not parsed half-way.
+                        const camIdMatch = buf.match(/CAM_ID:(\w+)\s/);
+                        if (camIdMatch) {
+                            k230CamPort = camIdMatch[1] === 'main' ? 'Main Cam' : camIdMatch[1].toUpperCase();
+                            buf = buf.replace(/CAM_ID:\w+\s/g, '');
+                        }
+                        const afStatusMatch = buf.match(/AF_STATUS:(enabled|off)\s/);
+                        if (afStatusMatch) {
+                            if (afStatusMatch[1] === 'enabled' && !k230CamPort.includes('AF')) {
+                                k230CamPort = `${k230CamPort || 'CAM0'} AF`;
+                            }
+                            buf = buf.replace(/AF_STATUS:(enabled|off)\s/g, '');
+                        }
+                        if (buf.includes('AF_FAIL')) {
+                            setStatus('K230 CAM0 opened, but autofocus could not be enabled.');
+                            buf = buf.replace(/AF_FAIL:[^\n]*\n?/g, '');
+                        }
+                        if (buf.includes('CAM_TRY_FAIL')) {
+                            setStatus('K230: that camera port is empty or busy — trying the next one…');
+                            buf = buf.replace(/CAM_TRY_FAIL:[^\n]*\n?/g, '');
+                        }
+                        if (buf.includes('CAM_READY')) { setStatus(`K230 camera ready (${k230CamPort || 'main'})…`); buf = buf.replace(/CAM_READY/g, ''); }
+                        if (buf.includes('BOOT_OK'))   { setStatus('K230 booted, starting camera…'); buf = buf.replace(/BOOT_OK/g, ''); }
+                        if (buf.includes('INIT_ERR'))  { setStatus('K230 camera init error — no camera found on main, CAM0 or CAM1.'); }
                     }
                 } catch (e) {
                     if (k230BrowserRunning) throw e;
                 } finally {
-                    try { reader.releaseLock(); } catch { }
+                    try { reader.releaseLock(); } catch {}
                     if (k230BrowserReader === reader) k230BrowserReader = null;
                 }
             }
@@ -2829,9 +2718,9 @@
             // this, WebSerial can keep the readable stream locked and the next
             // K230 connection intermittently fails or times out.
             k230BrowserClosePromise = (async () => {
-                try { await previousClose; } catch { }
+                try { await previousClose; } catch {}
                 if (reader) {
-                    try { await reader.cancel(); } catch { }
+                    try { await reader.cancel(); } catch {}
                     await _k230Delay(50); // allow the read loop's finally to release its lock
                 }
                 if (port) {
@@ -2841,8 +2730,8 @@
                             await w.write(new Uint8Array([0x03, 0x02]));
                             w.releaseLock();
                         }
-                    } catch { }
-                    try { await port.close(); } catch { }
+                    } catch {}
+                    try { await port.close(); } catch {}
                 }
             })();
             if (k230LatestFrame) { URL.revokeObjectURL(k230LatestFrame); k230LatestFrame = null; }
@@ -2996,7 +2885,7 @@
                             if (value) _esp32HandleText(decoder.decode(value, { stream: true }));
                         }
                     } finally {
-                        try { reader.releaseLock(); } catch { }
+                        try { reader.releaseLock(); } catch {}
                         if (esp32Reader === reader) esp32Reader = null;
                     }
                 }
@@ -3081,12 +2970,12 @@
             esp32Reader = esp32Writer = null;
             const previousClose = esp32ClosePromise;
             esp32ClosePromise = (async () => {
-                try { await previousClose; } catch { }
-                try { r && await r.cancel(); } catch { }
+                try { await previousClose; } catch {}
+                try { r && await r.cancel(); } catch {}
                 if (r) await _k230Delay(50);
-                try { w && await w.close(); } catch { }
-                try { w && w.releaseLock(); } catch { }
-                try { p && await p.close(); } catch { }
+                try { w && await w.close(); } catch {}
+                try { w && w.releaseLock(); } catch {}
+                try { p && await p.close(); } catch {}
             })();
             esp32LatestFrame = null;
             esp32CamIdx = null;
@@ -3863,6 +3752,82 @@
             return postToBackend('convert', formData);
         }
 
+        function closeQrTransferModal() {
+            const modal = document.getElementById('qrTransferModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function showQrTransferModal(payload, manifestUrl, expiresAt, inputSize) {
+            if (typeof QRCode === 'undefined') {
+                throw new Error('QR generator did not load. Check the internet connection and reload this page.');
+            }
+            const box = document.getElementById('qrCodeBox');
+            box.innerHTML = '';
+            new QRCode(box, {
+                text: payload,
+                width: 420,
+                height: 420,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.L
+            });
+            document.getElementById('qrTransferUrl').textContent = manifestUrl;
+            const expiry = new Date(expiresAt * 1000).toLocaleTimeString();
+            document.getElementById('qrTransferExpiry').textContent =
+                `Model ${inputSize}×${inputSize} · ticket expires at ${expiry}`;
+            document.getElementById('qrTransferModal').style.display = 'flex';
+        }
+
+        async function createK230QrTransfer(kmodelBlob, labelsBlob, inputSizeBlob, inputSize) {
+            const ssid = document.getElementById('qrWifiSsidInput').value.trim();
+            const password = document.getElementById('qrWifiPasswordInput').value;
+            if (!ssid) {
+                throw new Error('Enter the Wi-Fi SSID used by this PC and the K230.');
+            }
+
+            let backend;
+            try {
+                backend = new URL(
+                    document.getElementById('qrDownloadUrlInput').value.trim()
+                );
+            } catch {
+                throw new Error('K230 Download URL is invalid.');
+            }
+            if (backend.protocol !== 'http:') {
+                throw new Error('K230 Download URL must start with http://.');
+            }
+            if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(backend.hostname)) {
+                throw new Error(
+                    'K230 Download URL cannot use localhost. Use this PC’s Wi-Fi IPv4 address, ' +
+                    'for example http://192.168.0.19:5001.'
+                );
+            }
+            const qrDownloadBaseUrl =
+                `${backend.protocol}//${backend.host}${backend.pathname.replace(/\/$/, '')}`;
+
+            localStorage.setItem('curio_qr_wifi_ssid', ssid);
+            localStorage.setItem('curio_qr_download_url', qrDownloadBaseUrl);
+
+            const formData = new FormData();
+            formData.append('model', kmodelBlob, 'model.kmodel');
+            formData.append('labels', labelsBlob, 'labels.txt');
+            formData.append('input_size', inputSizeBlob, 'input_size.txt');
+            setStatus('Creating a one-hour QR transfer ticket...');
+            const response = await postToBackend('qr-transfer', formData);
+            const ticket = await response.json();
+            const manifestUrl = `${qrDownloadBaseUrl}${ticket.manifest_path}`;
+            const payload = JSON.stringify({
+                t: 'c230',
+                u: manifestUrl,
+                s: ssid,
+                p: password
+            });
+            showQrTransferModal(
+                payload, manifestUrl, ticket.expires_at, inputSize
+            );
+            setStatus('QR transfer ready — open QR File Transfer on the K230 and scan the code.');
+        }
+
         async function resetK230Board() {
             if (!SERIAL_SUPPORTED) {
                 alert('Reset K230 requires desktop Chrome or Edge with WebSerial.');
@@ -4115,32 +4080,14 @@
                     setStatus('✅ Wi-Fi deployment complete!');
                     alert(`✅ Successfully deployed to K230 via Wi-Fi (${ip})!\n\nModel input: ${deployedInputSize}×${deployedInputSize}\nFiles: model.kmodel, labels.txt, input_size.txt`);
 
-                    // 3b. USB deploy
-                }
-                else if (method === 'online') {
-                    const ip = document.getElementById('onlineIpInput').value.trim();
-                    const pt = document.getElementById('onlinePortInput').value.trim() || '8080';
-                    if (!ip) { alert('Enter the K230 board IP (use Auto-Detect or Ping to find it).'); setStatus('Deploy failed: no IP.'); return; }
-                    const url = `http://${ip}:${pt}/upload`;
-                    setStatus(`Pushing to K230 via Online Wi-Fi (${ip}:${pt})...`);
-                    try {
-                        const r1 = await fetch(url, { method: 'POST', headers: { 'X-Filename': 'model.kmodel' }, body: kmodelBlob });
-                        if (!r1.ok) throw new Error(`HTTP ${r1.status}`);
-                        await sleep(1500);
-                        const r2 = await fetch(url, { method: 'POST', headers: { 'X-Filename': 'labels.txt' }, body: labelsBlob });
-                        if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
-                    } catch (pushErr) {
-                        alert(`❌ Failed to connect to K230 at ${ip}:${pt}.\n\nEnsure:\n` +
-                            `1) K230 is connected to the same Wi-Fi network/router as this PC\n` +
-                            `2) K230 is running the Wi-Fi receiver script (STA mode)\n\nError: ${pushErr.message}`);
-                        setStatus('Deploy failed: K230 unreachable.'); return;
-                    }
-                    setStatus('✅ Online Wi-Fi deployment comple`te!');
-                    alert(`✅ Successfully deployed to K230 via Online Wi-Fi (${ip})!\n\nFiles saved to /sdcard/kmodel`);
+                // 3b. QR ticket deploy (the board scans, then downloads over Wi-Fi)
+                } else if (method === 'qr') {
+                    await createK230QrTransfer(
+                        kmodelBlob, labelsBlob, inputSizeBlob, deployedInputSize
+                    );
 
-                    // 3b. USB deploy
-                }
-                else if (method === 'usb') {
+                // 3c. USB deploy
+                } else if (method === 'usb') {
                     const baud = parseInt(document.getElementById('usbBaudSelect').value);
                     resetUsbPanel(); showUsbPanel(true);
 
@@ -4189,7 +4136,6 @@
                     setStatus('USB deployment complete!');
                     alert(`✅ Successfully deployed to K230 via USB!\n\nModel input: ${deployedInputSize}×${deployedInputSize}\nFiles saved to /sdcard/\n\nClick “Reset K230 Board” to restart the board and load the new model.`);
                 }
-
 
             } catch (e) {
                 console.error('Deploy error:', e);
@@ -4269,12 +4215,12 @@
             btn.innerHTML = '<span class="spinner"></span>Loading images...';
 
             try {
-                const nc = classes.length;
-                const labels = classes.map(c => c.name);
-                const skName = 'esp32s3_classifier';
+                const nc      = classes.length;
+                const labels  = classes.map(c => c.name);
+                const skName  = 'esp32s3_classifier';
                 const inputSize = 96;
 
-                try { await tf.setBackend('webgl'); } catch (_) { }
+                try { await tf.setBackend('webgl'); } catch (_) {}
 
                 // ── Step 1: convert all images to 96×96 grayscale tensors ──────
                 let totalUsed = 0;
@@ -4297,7 +4243,7 @@
 
                 // ── Step 2: train small CNN in-browser ──────────────────────────
                 const batchSize = Math.max(4, Math.min(16, Math.floor(totalUsed / 4)));
-                const epochs = 80;
+                const epochs    = 80;
                 setStatus(`Training small CNN (${totalUsed} images, ${epochs} epochs, batch ${batchSize})...`);
                 const smallCnn = _buildSmallCnn(nc);
                 smallCnn.compile({
@@ -4312,17 +4258,17 @@
                     callbacks: {
                         onEpochEnd(ep, logs) {
                             lastAcc = ((logs.accuracy ?? logs.acc ?? 0) * 100).toFixed(1);
-                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep + 1}/${epochs} — acc ${lastAcc}%`;
+                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep+1}/${epochs} — acc ${lastAcc}%`;
                         }
                     }
                 });
 
                 // Accuracy checks
                 const predTensor = smallCnn.predict(xAll);
-                const predData = await predTensor.array();
+                const predData   = await predTensor.array();
                 predTensor.dispose();
                 const perClassCorrect = new Array(nc).fill(0);
-                const perClassTotal = new Array(nc).fill(0);
+                const perClassTotal   = new Array(nc).fill(0);
                 for (let i = 0; i < ys.length; i++) {
                     const trueIdx = ys[i];
                     const predIdx = predData[i].indexOf(Math.max(...predData[i]));
@@ -4333,7 +4279,7 @@
                 const poorClasses = [];
                 for (let ci = 0; ci < nc; ci++) {
                     const acc = perClassCorrect[ci] / perClassTotal[ci];
-                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc * 100).toFixed(0)}%)`);
+                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc*100).toFixed(0)}%)`);
                 }
                 if (poorClasses.length > 0) {
                     const go = confirm(
@@ -4470,7 +4416,7 @@
                         ctx.drawImage(img, 0, 0, S, S);
                         const d = ctx.getImageData(0, 0, S, S).data;
                         for (let j = 0; j < S * S; j++)
-                            buf[i * S * S + j] = (0.299 * d[j * 4] + 0.587 * d[j * 4 + 1] + 0.114 * d[j * 4 + 2]) / 255;
+                            buf[i * S * S + j] = (0.299 * d[j*4] + 0.587 * d[j*4+1] + 0.114 * d[j*4+2]) / 255;
                         res();
                     };
                     img.onerror = rej;
@@ -4505,9 +4451,9 @@
                         const d = ctx.getImageData(0, 0, S, S).data;
                         const base = i * S * S * 3;
                         for (let j = 0; j < S * S; j++) {
-                            buf[base + j * 3] = d[j * 4] / 255;
-                            buf[base + j * 3 + 1] = d[j * 4 + 1] / 255;
-                            buf[base + j * 3 + 2] = d[j * 4 + 2] / 255;
+                            buf[base + j*3]     = d[j*4]   / 255;
+                            buf[base + j*3 + 1] = d[j*4+1] / 255;
+                            buf[base + j*3 + 2] = d[j*4+2] / 255;
                         }
                         res();
                     };
@@ -4525,16 +4471,16 @@
                 img.onload = () => {
                     try {
                         const canvas = document.createElement('canvas');
-                        canvas.width = ARDUINO_INPUT_SIZE;
+                        canvas.width  = ARDUINO_INPUT_SIZE;
                         canvas.height = ARDUINO_INPUT_SIZE;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, ARDUINO_INPUT_SIZE, ARDUINO_INPUT_SIZE);
                         const d = ctx.getImageData(0, 0, ARDUINO_INPUT_SIZE, ARDUINO_INPUT_SIZE);
                         const g = new Float32Array(ARDUINO_INPUT_SIZE * ARDUINO_INPUT_SIZE);
                         for (let i = 0, j = 0; i < d.data.length; i += 4, j++)
-                            g[j] = (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) / 255;
+                            g[j] = (0.299 * d.data[i] + 0.587 * d.data[i+1] + 0.114 * d.data[i+2]) / 255;
                         resolve(tf.tensor4d(g, [1, ARDUINO_INPUT_SIZE, ARDUINO_INPUT_SIZE, 1]));
-                    } catch (e) { reject(e); }
+                    } catch(e) { reject(e); }
                 };
                 img.onerror = () => reject(new Error('Image load failed: ' + url));
                 img.src = url;
@@ -4549,7 +4495,7 @@
             // — all natively supported by TFLite Micro with no extra op registration.
             const S = ARDUINO_INPUT_SIZE; // 96
             const m = tf.sequential();
-            m.add(tf.layers.conv2d({ inputShape: [S, S, 1], filters: 8, kernelSize: 3, padding: 'same', activation: 'relu' }));
+            m.add(tf.layers.conv2d({ inputShape: [S, S, 1], filters: 8,  kernelSize: 3, padding: 'same', activation: 'relu' }));
             m.add(tf.layers.maxPooling2d({ poolSize: 2 }));  // → 48×48×8
             m.add(tf.layers.conv2d({ filters: 16, kernelSize: 3, padding: 'same', activation: 'relu' }));
             m.add(tf.layers.maxPooling2d({ poolSize: 2 }));  // → 24×24×16
@@ -4639,11 +4585,11 @@
                     modalBtn.onclick = async () => {
                         try {
                             btn.innerHTML = '<span class="spinner"></span>Connecting to port…';
-                            try { _dfr1154.reader?.cancel(); } catch (_) { }
-                            try { _dfr1154.writer?.releaseLock(); } catch (_) { }
-                            try { _dfr1154.reader?.releaseLock(); } catch (_) { }
-                            try { await _dfr1154.port?.close(); } catch (_) { }
-                            _dfr1154.rxBuf = '';
+                            try { _dfr1154.reader?.cancel(); }      catch (_) {}
+                            try { _dfr1154.writer?.releaseLock(); } catch (_) {}
+                            try { _dfr1154.reader?.releaseLock(); } catch (_) {}
+                            try { await _dfr1154.port?.close(); }   catch (_) {}
+                            _dfr1154.rxBuf  = '';
                             if (esp32Running && esp32Port) {
                                 _dfr1154.port = esp32Port;
                                 lastEsp32UsbPort = esp32Port;
@@ -4655,10 +4601,10 @@
                             }
                             await _dfr1154.port.open({ baudRate: 115200, bufferSize: 8192 });
                             lastEsp32UsbPort = _dfr1154.port;
-                            try { await _dfr1154.port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (_) { }
+                            try { await _dfr1154.port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (_) {}
                             _dfr1154.reader = _dfr1154.port.readable.getReader();
                             _dfr1154.writer = _dfr1154.port.writable.getWriter();
-                            _serialReady = true;
+                            _serialReady    = true;
                             document.getElementById('serialPanel').classList.add('active');
                             dfr1154SetStatus('Serial connected — uploading…', true);
                             dfr1154Log('Port opened. Uploading MobileNetV3 model...');
@@ -4692,7 +4638,7 @@
                 const chunkSize = 4096; // firmware kSerialMaxModelChunk
                 for (let offset = 0; offset < tfliteBytes.length; offset += chunkSize) {
                     const chunk = tfliteBytes.slice(offset, Math.min(offset + chunkSize, tfliteBytes.length));
-                    const pct = Math.round(((offset + chunk.length) / tfliteBytes.length) * 100);
+                    const pct   = Math.round(((offset + chunk.length) / tfliteBytes.length) * 100);
                     btn.innerHTML = `<span class="spinner"></span>Uploading to DFR1154… ${pct}%`;
                     await dfr1154Write('MODEL_CHUNK ' + offset + ' ' + chunk.length + '\n');
                     await _dfr1154.writer.write(chunk);
@@ -4738,13 +4684,13 @@
             btn.innerHTML = '<span class="spinner"></span>Loading images...';
 
             try {
-                const nc = classes.length;
-                const labels = classes.map(c => c.name);
-                const skName = 'esp32s3_classifier';
+                const nc      = classes.length;
+                const labels  = classes.map(c => c.name);
+                const skName  = 'esp32s3_classifier';
                 const dateStr = new Date().toISOString().slice(0, 10);
                 const inputSize = ARDUINO_INPUT_SIZE;
 
-                try { await tf.setBackend('webgl'); } catch (_) { }
+                try { await tf.setBackend('webgl'); } catch (_) {}
 
                 // ── Step 1: convert all images to 96×96 grayscale tensors ──────
                 let totalUsed = 0;
@@ -4768,7 +4714,7 @@
                 // ── Step 2: train small CNN in-browser ──────────────────────────
                 // Batch size must be ≤ total images; too-large batches hurt small datasets.
                 const batchSize = Math.max(4, Math.min(16, Math.floor(totalUsed / 4)));
-                const epochs = 80;
+                const epochs    = 80;
                 setStatus(`Training small CNN (${totalUsed} images, ${epochs} epochs, batch ${batchSize})...`);
                 const smallCnn = _buildSmallCnn(nc);
                 smallCnn.compile({
@@ -4783,17 +4729,17 @@
                     callbacks: {
                         onEpochEnd(ep, logs) {
                             lastAcc = ((logs.accuracy ?? logs.acc ?? 0) * 100).toFixed(1);
-                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep + 1}/${epochs} — acc ${lastAcc}%`;
+                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep+1}/${epochs} — acc ${lastAcc}%`;
                         }
                     }
                 });
 
                 // ── Per-class accuracy check — catch "always predicts class 0" failures ──
                 const predTensor = smallCnn.predict(xAll);
-                const predData = await predTensor.array();
+                const predData   = await predTensor.array();
                 predTensor.dispose();
                 const perClassCorrect = new Array(nc).fill(0);
-                const perClassTotal = new Array(nc).fill(0);
+                const perClassTotal   = new Array(nc).fill(0);
                 for (let i = 0; i < ys.length; i++) {
                     const trueIdx = ys[i];
                     const predIdx = predData[i].indexOf(Math.max(...predData[i]));
@@ -4804,7 +4750,7 @@
                 const poorClasses = [];
                 for (let ci = 0; ci < nc; ci++) {
                     const acc = perClassCorrect[ci] / perClassTotal[ci];
-                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc * 100).toFixed(0)}%)`);
+                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc*100).toFixed(0)}%)`);
                 }
                 if (poorClasses.length > 0) {
                     const go = confirm(
@@ -4885,8 +4831,8 @@
                 }
 
                 if (!isSerialUpload) {
-                    setStatus(`TFLite ready (${(tfliteBytes.length / 1024).toFixed(1)} KB). Downloading Teachable Machine Arduino ZIP...`);
-
+                    setStatus(`TFLite ready (${(tfliteBytes.length/1024).toFixed(1)} KB). Downloading Teachable Machine Arduino ZIP...`);
+                    
                     if (backendZipBlob) {
                         downloadBlob(backendZipBlob, `tm_arduino_model.zip`);
                     } else {
@@ -4908,17 +4854,17 @@
                         modalBtn.onclick = async () => {
                             try {
                                 btn.innerHTML = '<span class="spinner"></span>Connecting to port…';
-                                try { _dfr1154.reader?.cancel(); } catch (_) { }
-                                try { _dfr1154.writer?.releaseLock(); } catch (_) { }
-                                try { _dfr1154.reader?.releaseLock(); } catch (_) { }
-                                try { await _dfr1154.port?.close(); } catch (_) { }
-                                _dfr1154.rxBuf = '';
-                                _dfr1154.port = await navigator.serial.requestPort();
+                                try { _dfr1154.reader?.cancel(); }      catch (_) {}
+                                try { _dfr1154.writer?.releaseLock(); } catch (_) {}
+                                try { _dfr1154.reader?.releaseLock(); } catch (_) {}
+                                try { await _dfr1154.port?.close(); }   catch (_) {}
+                                _dfr1154.rxBuf  = '';
+                                _dfr1154.port   = await navigator.serial.requestPort();
                                 await _dfr1154.port.open({ baudRate: 115200, bufferSize: 8192 });
-                                try { await _dfr1154.port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (_) { }
+                                try { await _dfr1154.port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (_) {}
                                 _dfr1154.reader = _dfr1154.port.readable.getReader();
                                 _dfr1154.writer = _dfr1154.port.writable.getWriter();
-                                _serialReady = true;
+                                _serialReady    = true;
                                 document.getElementById('serialPanel').classList.add('active');
                                 dfr1154SetStatus('Serial connected — uploading…', true);
                                 dfr1154Log('Port opened. Uploading model...');
@@ -4956,7 +4902,7 @@
                     const chunkSize = 2048;
                     for (let offset = 0; offset < tfliteBytes.length; offset += chunkSize) {
                         const chunk = tfliteBytes.slice(offset, Math.min(offset + chunkSize, tfliteBytes.length));
-                        const pct = Math.round(((offset + chunk.length) / tfliteBytes.length) * 100);
+                        const pct   = Math.round(((offset + chunk.length) / tfliteBytes.length) * 100);
                         btn.innerHTML = `<span class="spinner"></span>Uploading to DFR1154… ${pct}%`;
                         dfr1154Log('→ MODEL_CHUNK ' + offset + ' ' + chunk.length);
                         await dfr1154Write('MODEL_CHUNK ' + offset + ' ' + chunk.length + '\n');
@@ -5031,7 +4977,7 @@
         // ══════════════════════════════════════════════════════════════
 
         const TM_LICENSE =
-            `/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+`/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -5493,10 +5439,10 @@ const int g_person_detect_model_data_len = ${bytes.length};
             btn.innerHTML = '<span class="spinner"></span>Loading images...';
 
             try {
-                const nc = classes.length;
+                const nc     = classes.length;
                 const labels = classes.map(c => c.name);
 
-                try { await tf.setBackend('webgl'); } catch (_) { }
+                try { await tf.setBackend('webgl'); } catch (_) {}
 
                 // ── Step 1: convert all images to 96×96 grayscale tensors ──────
                 let totalUsed = 0;
@@ -5519,7 +5465,7 @@ const int g_person_detect_model_data_len = ${bytes.length};
 
                 // ── Step 2: train small CNN in-browser ──────────────────────────
                 const batchSize = Math.max(4, Math.min(16, Math.floor(totalUsed / 4)));
-                const epochs = 80;
+                const epochs    = 80;
                 setStatus(`Training Teachable Machine MobileNet (${totalUsed} images, ${epochs} epochs, batch ${batchSize})...`);
                 const smallCnn = _buildTmMobileNet(nc);
                 smallCnn.compile({
@@ -5534,17 +5480,17 @@ const int g_person_detect_model_data_len = ${bytes.length};
                     callbacks: {
                         onEpochEnd(ep, logs) {
                             lastAcc = ((logs.accuracy ?? logs.acc ?? 0) * 100).toFixed(1);
-                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep + 1}/${epochs} — acc ${lastAcc}%`;
+                            btn.innerHTML = `<span class="spinner"></span>Epoch ${ep+1}/${epochs} — acc ${lastAcc}%`;
                         }
                     }
                 });
 
                 // Per-class accuracy check
                 const predTensor = smallCnn.predict(xAll);
-                const predData = await predTensor.array();
+                const predData   = await predTensor.array();
                 predTensor.dispose();
                 const perClassCorrect = new Array(nc).fill(0);
-                const perClassTotal = new Array(nc).fill(0);
+                const perClassTotal   = new Array(nc).fill(0);
                 for (let i = 0; i < ys.length; i++) {
                     const trueIdx = ys[i];
                     const predIdx = predData[i].indexOf(Math.max(...predData[i]));
@@ -5554,7 +5500,7 @@ const int g_person_detect_model_data_len = ${bytes.length};
                 const poorClasses = [];
                 for (let ci = 0; ci < nc; ci++) {
                     const acc = perClassCorrect[ci] / perClassTotal[ci];
-                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc * 100).toFixed(0)}%)`);
+                    if (acc < 0.70) poorClasses.push(`"${labels[ci]}" (${(acc*100).toFixed(0)}%)`);
                 }
                 if (poorClasses.length > 0) {
                     const go = confirm(
@@ -5629,17 +5575,17 @@ const int g_person_detect_model_data_len = ${bytes.length};
 
                 // ── Step 6: build the 9-file Teachable Machine ZIP locally ──────
                 btn.innerHTML = '<span class="spinner"></span>Generating Teachable Machine files...';
-                setStatus(`TFLite ready (${(tfliteBytes.length / 1024).toFixed(1)} KB). Building Teachable Machine ZIP...`);
+                setStatus(`TFLite ready (${(tfliteBytes.length/1024).toFixed(1)} KB). Building Teachable Machine ZIP...`);
 
                 const zip = new JSZip();
-                zip.file('tm_template_script.ino', TM_FILES.ino);
-                zip.file('arduino_main.cpp', TM_FILES.arduinoMain);
-                zip.file('main_functions.h', TM_FILES.mainFunctionsH);
-                zip.file('image_provider.h', TM_FILES.imageProviderH);
-                zip.file('arduino_image_provider.cpp', TM_FILES.imageProviderCpp);
-                zip.file('model_settings.h', tmModelSettingsH(nc));
-                zip.file('model_settings.cpp', tmModelSettingsCpp(labels));
-                zip.file('person_detect_model_data.h', TM_FILES.modelDataH);
+                zip.file('tm_template_script.ino',       TM_FILES.ino);
+                zip.file('arduino_main.cpp',             TM_FILES.arduinoMain);
+                zip.file('main_functions.h',             TM_FILES.mainFunctionsH);
+                zip.file('image_provider.h',             TM_FILES.imageProviderH);
+                zip.file('arduino_image_provider.cpp',   TM_FILES.imageProviderCpp);
+                zip.file('model_settings.h',             tmModelSettingsH(nc));
+                zip.file('model_settings.cpp',           tmModelSettingsCpp(labels));
+                zip.file('person_detect_model_data.h',   TM_FILES.modelDataH);
                 zip.file('person_detect_model_data.cpp', tmModelDataCpp(tfliteBytes));
 
                 const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
@@ -5775,9 +5721,9 @@ const int g_person_detect_model_data_len = ${bytes.length};
 
         function dfr1154SetStatus(msg, connected) {
             const dot = document.getElementById('serialDot');
-            const st = document.getElementById('serialStatusMsg');
+            const st  = document.getElementById('serialStatusMsg');
             if (dot) dot.className = 'serial-dot' + (connected ? ' connected' : '');
-            if (st) st.textContent = msg;
+            if (st)  st.textContent = msg;
         }
 
         function dfr1154Log(s) {
@@ -5804,8 +5750,8 @@ const int g_person_detect_model_data_len = ${bytes.length};
                     _dfr1154.reader.read(),
                     new Promise(r => setTimeout(() => r({ timeout: true }), remaining))
                 ]);
-                if (result.timeout) throw new Error('Serial timeout');
-                if (result.done) throw new Error('Serial disconnected');
+                if (result.timeout)     throw new Error('Serial timeout');
+                if (result.done)        throw new Error('Serial disconnected');
                 _dfr1154.rxBuf += dec.decode(result.value, { stream: true });
             }
         }

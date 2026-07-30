@@ -696,6 +696,8 @@
                         <select class="k230-select" id="usbBaudSelect">
                             <option value="115200">115200 &#x2014; safe</option>
                             <option value="921600" selected>921600 &#x2014; fast</option>
+                            <option value="1500000">1500000 &#x2014; faster</option>
+                            <option value="3000000">3000000 &#x2014; fastest</option>
                         </select>
                     </div>
                 </div>
@@ -745,10 +747,10 @@
 
 function _detectBackendUrl() {
     const origin = window.location.origin;
-    if (origin.includes('trycloudflare.com') || origin.includes('localhost:5001')) {
+    if (origin.includes('trycloudflare.com') || origin.includes('localhost:5002')) {
         return origin; // served via tunnel or windows_agent — use as-is
     }
-    return 'http://localhost:5001'; // fallback for local dev / Expo WebView
+    return 'http://localhost:5002'; // fallback for local dev / Expo WebView
 }
 
 const CONVERT_SERVER = _detectBackendUrl();
@@ -790,7 +792,18 @@ async function postToBackend(endpoint, formData) {
     }
 }
 
-const CHUNK_BYTES      = 192;
+// Bytes of raw file data per REPL round trip. Each round trip is one full
+// compile+exec cycle on the board (~15-25 ms), so this constant — not the baud
+// rate — sets the deploy time for a multi-megabyte .kmodel. Both are multiples
+// of 3 so base64 chunks never carry mid-stream padding.
+//
+// Raw-paste mode has a window handshake, so the host cannot outrun the board's
+// input buffer and the chunk can be large. Classic raw REPL has no flow control
+// at all: this board truncates a multi-kilobyte statement mid-string-literal,
+// and the surviving base64 then lexes as an identifier ("RuntimeError: name too
+// long"). So the classic path stays near the size it has proven it can absorb.
+const CHUNK_BYTES         = 4095;
+const CHUNK_BYTES_CLASSIC = 384;
 const SERIAL_SUPPORTED = 'serial' in navigator;
 const SR               = 16000;
 const WINDOW_SAMPLES   = 16000;
@@ -863,7 +876,13 @@ let esp32InferActive=false, esp32InferPromise=null;
 let esp32InferWaveform=new Float32Array(1024);
 
 const ENC=new TextEncoder(), DEC=new TextDecoder();
-let port=null, portReader=null, portWriter=null, connected=false, rxBuf='';
+let port=null, portReader=null, portWriter=null, connected=false;
+// Deploy-path RX buffer, held as raw byte chunks rather than decoded text:
+// the raw REPL protocol carries single-byte control codes that a UTF-8 decode
+// would corrupt. rxWaiters lets readers wake on arrival instead of polling.
+let rxQ=[], rxQLen=0, rxWaiters=[];
+// null = not yet probed, true = board offers raw-paste flow control, false = not.
+let rawPaste=null;
 
 // Dedicated serial state for K230 microphone capture. This is intentionally
 // separate from the existing K230 deployment connection.
@@ -891,15 +910,184 @@ function usbLogClear(){const el=document.getElementById('usbLog');if(el)el.inner
 function usbSetPct(i,p){const pv=Math.round(p*100);const pEl=document.getElementById('usbFile'+i+'Pct');const fEl=document.getElementById('usb'+i+'Fill');if(pEl)pEl.textContent=pv+'%';if(fEl)fEl.style.width=pv+'%';}
 function showUsbPanel(v){document.getElementById('usbProgressPanel')?.classList.toggle('visible',v);}
 function resetUsbPanel(){usbSetPct(1,0);usbSetPct(2,0);usbLogClear();showUsbPanel(false);}
-async function cleanupPort(){connected=false;try{portReader&&await portReader.cancel();}catch{}try{portReader&&portReader.releaseLock();}catch{}try{portWriter&&await portWriter.close();}catch{}try{portWriter&&portWriter.releaseLock();}catch{}try{port&&await port.close();}catch{}port=portReader=portWriter=null;}
-async function rxPump(){rxBuf='';try{while(connected){const{value,done}=await portReader.read();if(done)break;if(value?.length){const t=DEC.decode(value,{stream:true});rxBuf+=t;}}}catch(e){if(connected)usbLog('RX: '+e.message,'err');}}
+async function cleanupPort(){connected=false;try{portReader&&await portReader.cancel();}catch{}try{portReader&&portReader.releaseLock();}catch{}try{portWriter&&await portWriter.close();}catch{}try{portWriter&&portWriter.releaseLock();}catch{}try{port&&await port.close();}catch{}port=portReader=portWriter=null;rxReset();rawPaste=null;}
+function rxReset(){rxQ=[];rxQLen=0;}
+function rxPush(u8){rxQ.push(u8);rxQLen+=u8.length;const w=rxWaiters;rxWaiters=[];for(const f of w)f();}
+// Resolves as soon as bytes arrive, or after ms. Replaces fixed-interval
+// polling, which imposed its own latency floor on every round trip.
+function rxWait(ms){return new Promise(r=>{let done=false;const f=()=>{if(done)return;done=true;r();};rxWaiters.push(f);setTimeout(f,Math.max(1,ms));});}
+async function rxTake(n,ms){const dl=Date.now()+ms;while(rxQLen<n){if(Date.now()>=dl)throw new Error('Serial timeout (wanted '+n+' byte(s), have '+rxQLen+')');await rxWait(Math.min(50,dl-Date.now()));}
+    const out=new Uint8Array(n);let got=0;
+    while(got<n){const head=rxQ[0],take=Math.min(head.length,n-got);out.set(head.subarray(0,take),got);got+=take;if(take===head.length)rxQ.shift();else rxQ[0]=head.subarray(take);}
+    rxQLen-=n;return out;}
+async function rxTakeUntil(term,ms){const dl=Date.now()+ms;const acc=[];for(;;){const b=await rxTake(1,Math.max(1,dl-Date.now()));if(b[0]===term)return new Uint8Array(acc);acc.push(b[0]);}}
+async function rxPump(){rxReset();try{while(connected){const{value,done}=await portReader.read();if(done)break;if(value?.length)rxPush(value);}}catch(e){if(connected)usbLog('RX: '+e.message,'err');}}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 async function write(d){if(!portWriter)return;await portWriter.write(typeof d==='string'?ENC.encode(d):d);}
-async function enterRawREPL(){usbLog('Entering REPL...','info');await write('\x03');await sleep(200);await write('\x03');await sleep(200);rxBuf='';await write('\x01');await sleep(300);let b='',t=Date.now()+4000;while(Date.now()<t){b+=rxBuf;rxBuf='';if(b.includes('raw REPL')){usbLog('REPL ready','ok');rxBuf='';return;}await sleep(50);}await write('\x01');await sleep(500);b+=rxBuf;rxBuf='';if(b.includes('raw REPL'))usbLog('REPL ready','ok');else usbLog('REPL not found - reset board','warn');rxBuf='';}
+function bytesToStr(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return s;}
+function u8ToB64(u8){return btoa(bytesToStr(u8));}
+const HEXB=Array.from({length:256},(_,i)=>i.toString(16).padStart(2,'0'));
+function u8ToHex(u8){let s='';for(let i=0;i<u8.length;i++)s+=HEXB[u8[i]];return s;}
+// Drains whatever is buffered, returning it for diagnostics.
+async function rxDrain(ms=250){
+    await rxWait(ms);
+    return rxQLen?bytesToStr(await rxTake(rxQLen,300)):'';
+}
+// Ctrl-C out of any running script, Ctrl-A into raw REPL, discard the banner.
+// Leaves the board at the point where a command can be written.
+async function resyncRepl(){
+    await write('\x03');await sleep(250);await write('\x03');await sleep(250);
+    rxReset();
+    await write('\x01');await sleep(400);
+    const saw=await rxDrain();rxReset();
+    return saw;
+}
+// Leaves the board in raw REPL with the '>' prompt consumed; execPy re-consumes
+// the prompt it emits after each command, so that state holds between calls.
+async function enterRawREPL(){
+    usbLog('Entering REPL...','info');
+    let saw='';
+    for(let attempt=1;attempt<=3;attempt++){
+        saw=await resyncRepl();
+        // The banner text is not a reliable signal: CanMV builds word it
+        // differently and a running script interleaves its own output with it.
+        // Probe with a real command and let the response decide. Probe over
+        // classic exec, which needs no capability negotiation.
+        rawPaste=false;
+        try{await execPy('pass',6000);}
+        catch(e){usbLog('Attempt '+attempt+': '+e.message,'warn');continue;}
+        usbLog('REPL ready','ok');
+        // Now that the REPL is known good, find out whether this firmware offers
+        // flow control. Without it, large writes corrupt on this board.
+        rawPaste=null;
+        try{await execPy('pass',6000);}
+        catch(e){
+            usbLog('raw-paste probe failed ('+e.message+'); classic REPL','warn');
+            rawPaste=false;await resyncRepl();
+            try{await execPy('pass',6000);}catch{}
+        }
+        return;
+    }
+    const hint=saw.replace(/[\r\n]+/g,' ').trim().slice(0,120);
+    throw new Error('K230 raw REPL did not respond'+(hint?' (board sent: "'+hint+'")':' (board sent nothing)')+'. Reset the board, close any other serial monitor holding the port, then deploy again.');
+}
 async function exitRawREPL(){await write('\x02');await sleep(200);}
-async function execPy(code){rxBuf='';await write(code);await write('\x04');let full='';const dl=Date.now()+10000;while(Date.now()<dl){if(rxBuf.length){full+=rxBuf;rxBuf='';const oi=full.indexOf('OK');if(oi>=0){const a=full.slice(oi+2);const e1=a.indexOf('\x04');if(e1>=0){const e2=a.indexOf('\x04',e1+1);if(e2>=0){const se=a.slice(e1+1,e2).trim();if(se)usbLog('stderr: '+se,'warn');return a.slice(0,e1).trim();}}}if(full.includes('\r\n>')||full==='>'){await write('\x03');await sleep(100);rxBuf='';throw new Error('REPL continuation');}}await sleep(10);}throw new Error('Timeout');}
+// Raw REPL acknowledges a command with OK. Skip anything preceding it rather
+// than desyncing, since a board fresh out of a running script can still have
+// script output or a stray prompt in flight.
+async function rxSkipToOK(ms){
+    const dl=Date.now()+ms;const skipped=[];
+    for(;;){
+        const b=await rxTake(1,Math.max(1,dl-Date.now()));
+        if(b[0]===0x4f){
+            const n=await rxTake(1,Math.max(1,dl-Date.now()));
+            if(n[0]===0x4b)break;
+            skipped.push(b[0],n[0]);
+        }else skipped.push(b[0]);
+        if(skipped.length>4096)throw new Error('no OK from board (not in raw REPL?)');
+    }
+    const junk=bytesToStr(new Uint8Array(skipped)).replace(/[\r\n]+/g,' ').trim();
+    if(junk)usbLog('skipped: '+junk.slice(0,80),'warn');
+}
+// MicroPython raw-paste mode. The board advertises a window size and emits 0x01
+// as it drains each window, so the host physically cannot outrun its input
+// buffer — the guarantee classic raw REPL does not give. Returns false if this
+// firmware does not offer it, leaving the board ready for a classic write.
+async function pasteWrite(code,ms){
+    await write('\x05A\x01');
+    const h=await rxTake(2,4000);
+    if(h[0]!==0x52){try{await rxTakeUntil(0x3e,2000);}catch{}return false;}
+    if(h[1]!==0x01)return false;              // 'R\x00' = understood, not supported
+    const wb=await rxTake(2,4000),win=wb[0]|(wb[1]<<8);
+    if(win<32)return false;
+    const buf=ENC.encode(code);let remain=win,i=0;
+    while(i<buf.length){
+        while(remain===0||rxQLen){
+            const c=await rxTake(1,ms);
+            if(c[0]===0x01)remain+=win;
+            else if(c[0]===0x04){await write('\x04');throw new Error('board aborted the paste');}
+            else throw new Error('unexpected 0x'+c[0].toString(16)+' during raw paste');
+        }
+        const n=Math.min(remain,buf.length-i);
+        await write(buf.subarray(i,i+n));
+        remain-=n;i+=n;
+    }
+    await write('\x04');
+    await rxTakeUntil(0x04,ms);               // board acknowledges end of data
+    return true;
+}
+async function execPy(code,ms=25000){
+    let pasted=false;
+    if(rawPaste!==false){
+        pasted=await pasteWrite(code,ms);
+        if(rawPaste===null){rawPaste=pasted;usbLog(pasted?'raw-paste mode: flow controlled, window OK':'classic raw REPL: no flow control','info');}
+    }
+    if(!pasted){await write(code);await write('\x04');await rxSkipToOK(ms);}
+    const out=await rxTakeUntil(0x04,ms),err=await rxTakeUntil(0x04,ms);
+    await rxTakeUntil(0x3e,ms);
+    const es=bytesToStr(err).trim();
+    if(es){usbLog('stderr: '+es,'warn');throw new Error(es.split('\n').pop().trim()||'Board raised an exception');}
+    return bytesToStr(out).trim();
+}
 async function ensureDir(p){await execPy(`import os\r\ntry:\r\n os.mkdir('${p.replace(/\/$/,"")}')\r\nexcept:pass`);}
-async function writeFileOnBoard(dest,arr,onPct){await execPy(`_f=open('${dest}','wb')`);let off=0;while(off<arr.length){const sl=arr.slice(off,off+CHUNK_BYTES);const hex=Array.from(sl).map(b=>b.toString(16).padStart(2,'0')).join('');await execPy(`_f.write(bytes.fromhex('${hex}'))`);off+=sl.length;if(onPct)onPct(off/arr.length);}await execPy(`_f.close();del _f`);}
+async function boardFileSize(dest){
+    const n=parseInt(await execPy(`import os\r\ntry:\r\n print(os.stat('${dest}')[6])\r\nexcept:\r\n print(-1)`),10);
+    return Number.isFinite(n)?n:-1;
+}
+// base64 costs 1.33x on the wire against 2.0x for hex, and a2b_base64 decodes on
+// the board far faster than bytes.fromhex parses. bytes.fromhex is the fallback
+// because it is a builtin, so it works even if neither binascii module is present.
+async function pickEncoder(){
+    try{
+        await execPy('try:\r\n import ubinascii as _ub\r\nexcept:\r\n import binascii as _ub');
+        return u8=>`_f.write(_ub.a2b_base64('${u8ToB64(u8)}'))`;
+    }catch{
+        usbLog('No binascii on board; falling back to hex','warn');
+        return u8=>`_f.write(bytes.fromhex('${u8ToHex(u8)}'))`;
+    }
+}
+async function closeBoardFile(){try{await execPy('try:\r\n _f.close()\r\nexcept:\r\n pass');}catch{}}
+async function writeFileOnBoard(dest,arr,onPct){
+    let enc=await pickEncoder();
+    const t0=Date.now();
+    let chunk=rawPaste?CHUNK_BYTES:CHUNK_BYTES_CLASSIC,off=0,lastUi=0,mode='wb',tries=0;
+    for(;;){
+        try{
+            await execPy(`_f=open('${dest}','${mode}')`);
+            while(off<arr.length){
+                await execPy(enc(arr.subarray(off,off+chunk)));
+                off=Math.min(off+chunk,arr.length);
+                const now=Date.now();
+                if(onPct&&(now-lastUi>120||off>=arr.length)){lastUi=now;onPct(off/arr.length);}
+            }
+            await execPy('_f.close();del _f');
+            break;
+        }catch(e){
+            // A silent board is wedged, not merely overloaded. Shrinking the chunk
+            // and writing again only pushes it further under, so stop and say so.
+            if(/Serial timeout|no OK from board/i.test(e.message))
+                throw new Error(e.message+' — board stopped responding. Unplug/replug or reset the K230, then deploy again.');
+            if(++tries>4||chunk<=192)throw e;
+            chunk=Math.max(192,Math.floor(chunk/6)*3);
+            usbLog('Chunk failed ('+e.message+'); retrying at '+chunk+' B','warn');
+            await enterRawREPL();
+            // The previous _f is still open on the board. Reopening without
+            // closing it leaves a dangling handle on the SD card, which is what
+            // turned the retry into "OSError: [Errno 1] EPERM".
+            await closeBoardFile();
+            enc=await pickEncoder();
+            const have=await boardFileSize(dest);
+            off=have<0?0:Math.min(have,arr.length);
+            mode=off>0?'ab':'wb';
+        }
+    }
+    // A short write otherwise stays invisible until kpu.load_kmodel fails on the
+    // board, which is a confusing place to debug from.
+    const sz=await boardFileSize(dest);
+    if(sz!==arr.length)throw new Error(`${dest} is ${sz} bytes on the board, expected ${arr.length}`);
+    const secs=Math.max(0.001,(Date.now()-t0)/1000);
+    usbLog(`${(arr.length/1024).toFixed(0)} KB in ${secs.toFixed(1)}s (${(arr.length/1024/secs).toFixed(1)} KB/s)`,'info');
+}
 function onDeployMethodChange(val){document.getElementById('wifiRow').style.display=val==='wifi'?'flex':'none';document.getElementById('usbBaudRow').style.display=val==='usb'?'flex':'none';if(val!=='usb')showUsbPanel(false);}
 function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
