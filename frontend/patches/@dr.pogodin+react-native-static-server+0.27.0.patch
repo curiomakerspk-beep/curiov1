@@ -1,0 +1,69 @@
+diff --git a/node_modules/@dr.pogodin/react-native-static-server/lighttpd1.4/src/CMakeLists.txt b/node_modules/@dr.pogodin/react-native-static-server/lighttpd1.4/src/CMakeLists.txt
+index 81a709d..8da05bc 100644
+--- a/node_modules/@dr.pogodin/react-native-static-server/lighttpd1.4/src/CMakeLists.txt
++++ b/node_modules/@dr.pogodin/react-native-static-server/lighttpd1.4/src/CMakeLists.txt
+@@ -331,9 +331,9 @@ macro(XCONFIG _package _link_FLAGS _cflags)
+ 		else()
+ 			execute_process(COMMAND ${XCONFIG_EXECUTABLE} --libs OUTPUT_VARIABLE __link_FLAGS)
+ 		endif()
+-		string(REPLACE "\n" "" ${_link_FLAGS} ${__link_FLAGS})
++		string(REPLACE "\n" "" ${_link_FLAGS} "${__link_FLAGS}")
+ 		execute_process(COMMAND ${XCONFIG_EXECUTABLE} --cflags OUTPUT_VARIABLE __cflags)
+-		string(REPLACE "\n" "" ${_cflags} ${__cflags})
++		string(REPLACE "\n" "" ${_cflags} "${__cflags}")
+ 	else()
+ 		message(STATUS "found ${_package}: no")
+ 	endif()
+@@ -584,25 +584,29 @@ if(WITH_PCRE2)
+ 		set(HAVE_PCRE2_H 1)
+ 		set(HAVE_PCRE 1)
+ 	else()
+-		if(NOT WIN32)
++		if(NOT WIN32 AND NOT CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
+ 			check_include_files(pcre2.h HAVE_PCRE2_H)
+ 			check_library_exists(pcre2-8 pcre2_match_8 "" HAVE_PCRE)
+ 			set(PCRE_LDFLAGS -lpcre2-8)
+ 		else()
+-			find_path(PCRE_INCLUDE_DIR pcre2.h)
++			find_path(PCRE_INCLUDE_DIR pcre2.h HINTS "${CMAKE_BINARY_DIR}/sysroot/include" NO_CMAKE_FIND_ROOT_PATH)
+ 
+ 			set(PCRE_NAMES pcre2-8)
+ 			find_library(PCRE_LIBRARY
+ 			NAMES ${PCRE_NAMES}
++			HINTS "${CMAKE_BINARY_DIR}/sysroot/lib"
++			NO_CMAKE_FIND_ROOT_PATH
+ 			)
+ 
+ 			if(PCRE_INCLUDE_DIR AND PCRE_LIBRARY)
+-				set(CMAKE_REQUIRED_INCLUDES ${PCRE_INCLUDE_DIR})
+-				set(CMAKE_REQUIRED_LIBRARIES ${PCRE_LIBRARY})
+-				check_include_files(pcre2.h HAVE_PCRE2_H)
+-				check_library_exists(pcre2-8 pcre2_match_8 "" HAVE_PCRE)
+-				set(CMAKE_REQUIRED_INCLUDES)
+-				set(CMAKE_REQUIRED_LIBRARIES)
++				## check_include_files/check_library_exists can't be used here: pcre2.h
++				## requires PCRE2_CODE_UNIT_WIDTH to be defined before inclusion (which
++				## these generic checks don't set), and check_library_exists doesn't pass
++				## a -L search path for our non-standard sysroot. find_path/find_library
++				## above already confirmed both exist, so trust that directly.
++				set(HAVE_PCRE2_H 1)
++				set(HAVE_PCRE 1)
++				set(PCRE_LDFLAGS ${PCRE_LIBRARY})
+ 				include_directories(${PCRE_INCLUDE_DIR})
+ 			endif()
+ 		endif()
+@@ -984,7 +988,13 @@ set(SERVER_SRC
+ if(BUILD_LIBRARY)
+ 	add_library(lighttpd ${SERVER_SRC} ${COMMON_SRC} ${BUILTIN_MODS})
+ 	if(WITH_JAVA_NATIVE_INTERFACE)
+-		target_link_libraries(lighttpd glob)
++		if(CMAKE_HOST_SYSTEM_NAME MATCHES "Windows" AND EXISTS "${CMAKE_BINARY_DIR}/sysroot/lib/libglob.so")
++			## bare "-lglob" needs a -L search path that isn't set up for our
++			## non-standard sysroot on Windows hosts; link the built .so directly.
++			target_link_libraries(lighttpd "${CMAKE_BINARY_DIR}/sysroot/lib/libglob.so")
++		else()
++			target_link_libraries(lighttpd glob)
++		endif()
+ 	endif()
+ 	if (WITH_ANDROID_NDK_SYSLOG_INTERCEPT)
+ 		target_link_libraries(lighttpd log)
