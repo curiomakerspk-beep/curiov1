@@ -967,6 +967,7 @@ async function loadBackbone(){
         ['addClassBtn','addNoiseBtn','trainBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=false;});
         setStatus('Backbone loaded (embed dim: '+EMBED_DIM+') — add clips for each class, then train.');
         render();
+        reembedRestoredAudio();
     }catch(e){
         if(fill){fill.style.width='100%';fill.style.background='#ef4444';}
         if(icon)icon.textContent='❌';
@@ -2063,9 +2064,9 @@ function addThumb(classIdx,pcm,emb,clipIdx){
     const cv=document.createElement('canvas');cv.width=44;cv.height=26;
     drawWaveThumb(cv,pcm,cls.color);
     const del=document.createElement('button');del.className='thumb-del';del.textContent='X';
-    del.onclick=()=>{wrap.remove();if(classAudio[cls.name])classAudio[cls.name].splice(clipIdx,1);if(embeddings[cls.name])embeddings[cls.name].splice(clipIdx,1);const count=(embeddings[cls.name]||[]).length;const ce=document.getElementById('cc-count-'+classIdx);if(ce)ce.textContent=count+' clips';renderStats();trained=false;updateButtons();};
+    del.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);wrap.remove();if(classAudio[cls.name])classAudio[cls.name].splice(i,1);if(embeddings[cls.name])embeddings[cls.name].splice(i,1);const count=(embeddings[cls.name]||[]).length;const ce=document.getElementById('cc-count-'+classIdx);if(ce)ce.textContent=count+' clips';const vc=document.getElementById('vis-count-'+classIdx);if(vc)vc.textContent=count+' clips';renderStats();trained=false;updateButtons();};
     const play=document.createElement('button');play.className='thumb-play';play.textContent='▶';play.title=(pcm.length/SR).toFixed(2)+'s @ 16kHz';
-    (()=>{const pi=clipIdx;play.onclick=()=>playClip(classIdx,pi,play);})();
+    play.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);playClip(classIdx,i,play);};
     wrap.appendChild(cv);wrap.appendChild(del);wrap.appendChild(play);thumbsEl.appendChild(wrap);
 }
 
@@ -2124,9 +2125,9 @@ function renderClasses(){
             const cv=document.createElement('canvas');cv.width=44;cv.height=26;
             drawWaveThumb(cv,pcm,cls.color);
             const del=document.createElement('button');del.className='thumb-del';del.textContent='X';
-            del.onclick=(()=>{const ci2=ci;return()=>{wrap.remove();if(classAudio[cls.name])classAudio[cls.name].splice(ci2,1);if(embeddings[cls.name])embeddings[cls.name].splice(ci2,1);const c=(embeddings[cls.name]||[]).length;const ce=document.getElementById('cc-count-'+idx);if(ce)ce.textContent=c+' clips';renderStats();trained=false;updateButtons();};})();
+            del.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);wrap.remove();if(classAudio[cls.name])classAudio[cls.name].splice(i,1);if(embeddings[cls.name])embeddings[cls.name].splice(i,1);const c=(embeddings[cls.name]||[]).length;const ce=document.getElementById('cc-count-'+idx);if(ce)ce.textContent=c+' clips';const vc=document.getElementById('vis-count-'+idx);if(vc)vc.textContent=c+' clips';renderStats();trained=false;updateButtons();};
             const play=document.createElement('button');play.className='thumb-play';play.textContent='▶';
-            (()=>{const pi=ci;play.onclick=()=>playClip(idx,pi,play);})();
+            play.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);playClip(idx,i,play);};
             wrap.appendChild(cv);wrap.appendChild(del);wrap.appendChild(play);thumbsEl.appendChild(wrap);
         });
         if(isRec&&(micAnalyser||activeMicSource==='k230'||activeMicSource==='esp32'))animateMicVis(idx);
@@ -2140,13 +2141,60 @@ function renderStats(){
             <span class="stat-name">${cls.name}</span>
             <span class="stat-count">${(embeddings[cls.name]||[]).length} clips</span>
         </div>`).join('');
+    scheduleSaveVoiceState();
+}
+
+// ── Session persistence — survives a page reload, cleared only by Reset ────
+const _VOICE_STORE_KEY='curio_voice_state_v1';
+let pendingReembed=false;
+let _voiceSaveTimer=null;
+function scheduleSaveVoiceState(){clearTimeout(_voiceSaveTimer);_voiceSaveTimer=setTimeout(saveVoiceState,300);}
+function saveVoiceState(){
+    try{
+        const audioOut={};
+        for(const k in classAudio)audioOut[k]=classAudio[k].map(p=>Array.from(p));
+        sessionStorage.setItem(_VOICE_STORE_KEY,JSON.stringify({classes,nextClassId,classAudio:audioOut}));
+    }catch(e){/* quota exceeded — too much recorded audio; silently skip */}
+}
+function loadVoiceState(){
+    try{
+        const raw=sessionStorage.getItem(_VOICE_STORE_KEY);
+        if(!raw)return false;
+        const s=JSON.parse(raw);
+        if(!Array.isArray(s.classes)||s.classes.length===0)return false;
+        classes=s.classes;
+        nextClassId=s.nextClassId??(Math.max(...s.classes.map(c=>c.id))+1);
+        classAudio={};embeddings={};
+        classes.forEach(c=>{
+            const clips=(s.classAudio&&s.classAudio[c.name])||[];
+            classAudio[c.name]=clips.map(a=>Float32Array.from(a));
+            embeddings[c.name]=[];
+        });
+        pendingReembed=Object.values(classAudio).some(a=>a.length>0);
+        return true;
+    }catch(e){return false;}
+}
+// Raw audio is what's persisted — embeddings are re-derived from it once the
+// backbone finishes loading, so a stored session never depends on model version.
+async function reembedRestoredAudio(){
+    if(!pendingReembed)return;
+    pendingReembed=false;
+    let n=0;
+    for(const cls of classes){
+        const clips=classAudio[cls.name]||[];
+        if(!clips.length)continue;
+        embeddings[cls.name]=[];
+        for(const pcm of clips){embeddings[cls.name].push(await embedClip(pcm));n++;}
+    }
+    if(n>0)setStatus('Restored '+n+' clip(s) from your last session.');
+    render();
 }
 
 // ── Class management ──────────────────────────────────────────────────────
 function addClass(){const id=nextClassId++;classes.push({id,name:'Word'+id,color:COLORS[(id-1)%COLORS.length]});render();}
 function addNoiseClass(){if(classes.find(c=>isNoise(c.name))){alert('Noise class already exists!');return;}classes.push({id:nextClassId++,name:'Background Noise',color:'#fbbf24'});render();setStatus('Noise class added — record silence or ambient room sound.');}
 async function removeClass(idx){if(classes.length<=2){alert('Need at least 2 classes');return;}if(isRecording){alert('Wait for recording to finish first.');return;}if(activeMicIdx===idx)await stopMic();const cls=classes[idx];delete embeddings[cls.name];delete classAudio[cls.name];classes.splice(idx,1);trained=false;updateButtons();render();}
-function renameClass(idx,name){const cls=classes[idx];const old=cls.name;if(embeddings[old]){embeddings[name]=embeddings[old];delete embeddings[old];}if(classAudio[old]){classAudio[name]=classAudio[old];delete classAudio[old];}cls.name=name;renderStats();const lEl=document.getElementById('output-label-'+idx);if(lEl){lEl.textContent=name;lEl.style.color=cls.color;}}
+function renameClass(idx,name){const cls=classes[idx];const old=cls.name;if(old===name)return;if(embeddings[old]){embeddings[name]=embeddings[old];delete embeddings[old];}if(classAudio[old]){classAudio[name]=classAudio[old];delete classAudio[old];}cls.name=name;renderStats();const lEl=document.getElementById('output-label-'+idx);if(lEl){lEl.textContent=name;lEl.style.color=cls.color;}}
 
 // ── Extract x2 ────────────────────────────────────────────────────────────
 function extractClips(classIdx){
@@ -2158,7 +2206,7 @@ function extractClips(classIdx){
     const countEl=document.getElementById('cc-count-'+classIdx);if(countEl)countEl.textContent=newCount+' clips';
     renderStats();trained=false;updateButtons();
     const thumbsEl=document.getElementById('thumbs-'+classIdx);
-    if(thumbsEl){audio.forEach((pcm,i)=>{const ni=embs.length+i;const wrap=document.createElement('div');wrap.className='thumb';const cv=document.createElement('canvas');cv.width=44;cv.height=26;drawWaveThumb(cv,pcm,cls.color);const del=document.createElement('button');del.className='thumb-del';del.textContent='X';del.onclick=()=>{wrap.remove();if(embeddings[cls.name])embeddings[cls.name].splice(ni,1);if(classAudio[cls.name])classAudio[cls.name].splice(ni,1);renderStats();};const play=document.createElement('button');play.className='thumb-play';play.textContent='▶';(()=>{const pi=ni;play.onclick=()=>playClip(classIdx,pi,play);})();wrap.appendChild(cv);wrap.appendChild(del);wrap.appendChild(play);thumbsEl.appendChild(wrap);});}
+    if(thumbsEl){audio.forEach((pcm)=>{const wrap=document.createElement('div');wrap.className='thumb';const cv=document.createElement('canvas');cv.width=44;cv.height=26;drawWaveThumb(cv,pcm,cls.color);const del=document.createElement('button');del.className='thumb-del';del.textContent='X';del.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);wrap.remove();if(embeddings[cls.name])embeddings[cls.name].splice(i,1);if(classAudio[cls.name])classAudio[cls.name].splice(i,1);const c=(embeddings[cls.name]||[]).length;const ce=document.getElementById('cc-count-'+classIdx);if(ce)ce.textContent=c+' clips';const vc=document.getElementById('vis-count-'+classIdx);if(vc)vc.textContent=c+' clips';renderStats();trained=false;updateButtons();};const play=document.createElement('button');play.className='thumb-play';play.textContent='▶';play.onclick=()=>{const i=Array.prototype.indexOf.call(thumbsEl.children,wrap);playClip(classIdx,i,play);};wrap.appendChild(cv);wrap.appendChild(del);wrap.appendChild(play);thumbsEl.appendChild(wrap);});}
     setStatus('"'+cls.name+'" doubled to '+newCount+' clips. Re-train.');
 }
 
@@ -2761,6 +2809,7 @@ async function resetAll(){
     trained=false;headModel=null;classNamesCopy=[];embeddings={};classAudio={};
     classes=[{id:1,name:'Word1',color:'#4ade80'},{id:2,name:'Word2',color:'#60a5fa'}];
     nextClassId=3;resetUsbPanel();updateButtons();
+    try{sessionStorage.removeItem(_VOICE_STORE_KEY);}catch(e){}
     setStatus('Reset complete. Start fresh!');
     setTrainState('<div class="state-ready"><div class="icon">🧠</div><h3>Ready to train.</h3><p>Add at least 5 clips per class<br>then press Train.</p></div>');
     render();
@@ -3383,7 +3432,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             }
         }
     })();
-    classes.forEach(c=>{embeddings[c.name]=[];classAudio[c.name]=[];});
+    if(!loadVoiceState()){classes.forEach(c=>{embeddings[c.name]=[];classAudio[c.name]=[];});}
     setClipLen(1500);
     render();
     loadBackbone();
