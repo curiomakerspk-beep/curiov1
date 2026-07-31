@@ -743,6 +743,14 @@
 <script>
 'use strict';
 
+/**
+
+ * Returns default backend URL derived from current origin hostname on port 5001.
+
+ * Ensures local server connections route to Python backend automatically.
+
+ */
+
 function _detectBackendUrl() {
     const origin = window.location.origin;
     if (origin.includes('trycloudflare.com') || origin.includes('localhost:5001')) {
@@ -759,12 +767,28 @@ window.addEventListener('DOMContentLoaded', () => {
     if (typeof loadInputSettings === 'function') loadInputSettings();
 });
 
+/**
+
+ * Reads user input or detects backend server URL for API requests.
+
+ * Strips trailing slashes from URL strings.
+
+ */
+
 function getBackendUrl() {
     const input = document.getElementById('backendUrlInput');
     let url = input?.value?.trim() || CONVERT_SERVER;
     if (url.endsWith('/')) url = url.slice(0, -1);
     return url;
 }
+
+/**
+
+ * Posts form data to backend service as a background job and polls until complete.
+
+ * Prevents Cloudflare tunnel request timeouts for long model conversions or training.
+
+ */
 
 async function postToBackend(endpoint, formData) {
     const backendUrl = getBackendUrl();
@@ -886,31 +910,98 @@ let esp32MonitorActive=false, esp32MonitorPromise=null;
 let esp32Waveform=new Float32Array(1024);
 
 // ── WebSerial utilities ──────────────────────────────────────────────────
+/**
+ * Appends a timestamped status message into the USB transfer progress log window.
+ * Automatically scrolls log window to display latest entries.
+ */
 function usbLog(m,c=''){const el=document.getElementById('usbLog');if(!el)return;const l=document.createElement('div');if(c)l.className=c;l.textContent=m;el.appendChild(l);el.scrollTop=el.scrollHeight;}
+/**
+ * Clears all log entries displayed in the USB progress log window.
+ */
 function usbLogClear(){const el=document.getElementById('usbLog');if(el)el.innerHTML='';}
+/**
+ * Updates progress bar fill width and percentage label for USB file transfer steps.
+ */
 function usbSetPct(i,p){const pv=Math.round(p*100);const pEl=document.getElementById('usbFile'+i+'Pct');const fEl=document.getElementById('usb'+i+'Fill');if(pEl)pEl.textContent=pv+'%';if(fEl)fEl.style.width=pv+'%';}
+/**
+ * Shows or hides USB transfer progress panel UI element.
+ */
 function showUsbPanel(v){document.getElementById('usbProgressPanel')?.classList.toggle('visible',v);}
+/**
+ * Resets file upload progress bars to 0% and clears log text display.
+ */
 function resetUsbPanel(){usbSetPct(1,0);usbSetPct(2,0);usbLogClear();showUsbPanel(false);}
+/**
+ * Safely closes active WebSerial reader/writer handles and port connections.
+ */
 async function cleanupPort(){connected=false;try{portReader&&await portReader.cancel();}catch{}try{portReader&&portReader.releaseLock();}catch{}try{portWriter&&await portWriter.close();}catch{}try{portWriter&&portWriter.releaseLock();}catch{}try{port&&await port.close();}catch{}port=portReader=portWriter=null;}
+/**
+ * Continuously reads raw stream data bytes from open WebSerial connection into text buffer.
+ */
 async function rxPump(){rxBuf='';try{while(connected){const{value,done}=await portReader.read();if(done)break;if(value?.length){const t=DEC.decode(value,{stream:true});rxBuf+=t;}}}catch(e){if(connected)usbLog('RX: '+e.message,'err');}}
+/**
+ * Asynchronously pauses code execution for specified duration in milliseconds.
+ */
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+/**
+ * Writes text string commands or raw Uint8Array byte buffer to serial output stream.
+ */
 async function write(d){if(!portWriter)return;await portWriter.write(typeof d==='string'?ENC.encode(d):d);}
+/**
+ * Sends interrupt signals and enters MicroPython raw REPL mode on K230 board.
+ */
 async function enterRawREPL(){usbLog('Entering REPL...','info');await write('\x03');await sleep(200);await write('\x03');await sleep(200);rxBuf='';await write('\x01');await sleep(300);let b='',t=Date.now()+4000;while(Date.now()<t){b+=rxBuf;rxBuf='';if(b.includes('raw REPL')){usbLog('REPL ready','ok');rxBuf='';return;}await sleep(50);}await write('\x01');await sleep(500);b+=rxBuf;rxBuf='';if(b.includes('raw REPL'))usbLog('REPL ready','ok');else usbLog('REPL not found - reset board','warn');rxBuf='';}
+/**
+ * Sends control sequence to exit MicroPython raw REPL mode on K230 hardware.
+ */
 async function exitRawREPL(){await write('\x02');await sleep(200);}
+/**
+ * Executes MicroPython code string on board via REPL and returns printed output text.
+ */
 async function execPy(code){rxBuf='';await write(code);await write('\x04');let full='';const dl=Date.now()+10000;while(Date.now()<dl){if(rxBuf.length){full+=rxBuf;rxBuf='';const oi=full.indexOf('OK');if(oi>=0){const a=full.slice(oi+2);const e1=a.indexOf('\x04');if(e1>=0){const e2=a.indexOf('\x04',e1+1);if(e2>=0){const se=a.slice(e1+1,e2).trim();if(se)usbLog('stderr: '+se,'warn');return a.slice(0,e1).trim();}}}if(full.includes('\r\n>')||full==='>'){await write('\x03');await sleep(100);rxBuf='';throw new Error('REPL continuation');}}await sleep(10);}throw new Error('Timeout');}
+/**
+ * Creates target directory path on board file system using Python `os.mkdir`.
+ */
 async function ensureDir(p){await execPy(`import os\r\ntry:\r\n os.mkdir('${p.replace(/\/$/,"")}')\r\nexcept:pass`);}
+/**
+ * Saves binary file onto board SD card in chunked hex blocks with progress updates.
+ */
 async function writeFileOnBoard(dest,arr,onPct){await execPy(`_f=open('${dest}','wb')`);let off=0;while(off<arr.length){const sl=arr.slice(off,off+CHUNK_BYTES);const hex=Array.from(sl).map(b=>b.toString(16).padStart(2,'0')).join('');await execPy(`_f.write(bytes.fromhex('${hex}'))`);off+=sl.length;if(onPct)onPct(off/arr.length);}await execPy(`_f.close();del _f`);}
+/**
+ * Updates visible UI input fields depending on selected deployment method option.
+ */
 function onDeployMethodChange(val){document.getElementById('wifiRow').style.display=val==='wifi'?'flex':'none';document.getElementById('usbBaudRow').style.display=val==='usb'?'flex':'none';if(val!=='usb')showUsbPanel(false);}
+/**
+ * Triggers browser file download for a Blob object with given file name.
+ */
 function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
 // ── Helpers ──────────────────────────────────────────────────────────────
+/**
+ * Displays status message text in main top status bar element.
+ */
 function setStatus(msg){document.getElementById('statusBar').textContent=msg;}
+/**
+ * Updates classification detection confidence threshold percentage setting.
+ */
 function updateThresh(v){THRESH=parseInt(v)/100;const el=document.getElementById('thresholdValue');if(el)el.textContent=v+'%';}
+/**
+ * Updates continuous voice prediction loop timer interval in milliseconds.
+ */
 function updateInferInterval(v){INFER_MS=parseInt(v);const e1=document.getElementById('threshDisplay2');if(e1)e1.textContent=v+'ms';const e2=document.getElementById('inferDisplay');if(e2)e2.textContent=v+'ms';if(micActive)restartInferTimer();}
+/**
+ * Checks if a class name represents background noise or silence.
+ */
 function isNoise(name){const n=name.toLowerCase();return n.includes('noise')||n.includes('background')||n.includes('silence');}
+/**
+ * Enables or disables action buttons based on model trained state.
+ */
 function updateButtons(){const ok=trained;['deployHeaderBtn','deployCardBtn','deployK230Btn','exportBtn','exportEsp32Btn','deployEsp32Btn','micBtn','k230InferBtn','esp32InferBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=!ok;});}
 
 // ── Clip length ───────────────────────────────────────────────────────────
+/**
+ * Sets target audio clip duration (e.g. 1s) and recalculates STFT spectrogram window counts.
+ */
 function setClipLen(ms){
     CLIP_MS=ms;
     document.querySelectorAll('.cl-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.ms)===ms));
@@ -921,9 +1012,15 @@ function setClipLen(ms){
     const b=document.getElementById('pbClipLen');   if(b)b.textContent=ms/1000;
     const c2=document.getElementById('pbWindows');  if(c2)c2.textContent=nW;
 }
+/**
+ * Computes number of STFT time windows needed for selected audio clip duration.
+ */
 function computeNWindows(ms){const samples=Math.ceil(SR*(ms/1000));let n=0,start=0;while(start+WINDOW_SAMPLES<=samples){n++;start+=HOP_SAMPLES;}return Math.max(1,n);}
 
 // ── Build embedding extractor from backbone layer references ─────────────
+/**
+ * Constructs TensorFlow.js feature extraction model graph from backbone layers.
+ */
 function buildEmbedExtractor(){
     const layers=backbone.layers;
     let embedLayer=null, embedDim=0;
@@ -946,6 +1043,9 @@ function buildEmbedExtractor(){
 }
 
 // ── Load backbone ────────────────────────────────────────────────────────
+/**
+ * Loads pre-trained Audio Spectrogram MobileNet feature extraction model from backend.
+ */
 async function loadBackbone(){
     const fill=document.getElementById('modelLoadFill');
     const icon=document.getElementById('modelLoadIcon');
@@ -979,6 +1079,9 @@ async function loadBackbone(){
 }
 
 // ── Pure-JS radix-2 Cooley-Tukey FFT ────────────────────────────────────
+/**
+ * Computes Real FFT magnitude spectrum for a 512-sample audio frame window.
+ */
 function realFFTMagnitudes(signal){
     const n=signal.length;
     const re=new Float32Array(signal);
@@ -992,6 +1095,9 @@ function realFFTMagnitudes(signal){
 }
 
 // ── Spectrogram preprocessing ────────────────────────────────────────────
+/**
+ * Computes STFT spectrogram magnitude matrix from 16kHz Float32 PCM sample array.
+ */
 function computeSpectrogram(pcm16k){
     const n=pcm16k.length,win=FFT_WIN;
     const hop=MODEL_FRAMES>1?Math.max(1,Math.floor((n-win)/(MODEL_FRAMES-1))):n;
@@ -1007,6 +1113,9 @@ function computeSpectrogram(pcm16k){
     }
     return tf.tensor4d(specData,[1,MODEL_FRAMES,MODEL_BINS,1]);
 }
+/**
+ * Generates dB-scaled normalized spectrogram tensor formatted for MobileNet backbone.
+ */
 function computeNormalizedSpectrogram(pcm16k){
     const spec = computeSpectrogram(pcm16k);
     const data = spec.dataSync();
@@ -1030,9 +1139,15 @@ function computeNormalizedSpectrogram(pcm16k){
 // microphone gain difference produces, so clips recorded on the laptop mic
 // transfer to the K230/ESP32-S3 mics. The K230 script and ESP32 firmware
 // (tm_speech_commands_norm_log mode) apply the identical normalization.
+/**
+ * Formats single spectrogram time window into normalized input tensor.
+ */
 function prepareWindowInput(pcm16k){return computeNormalizedSpectrogram(pcm16k);}
 
 // ── Embed one window ─────────────────────────────────────────────────────
+/**
+ * Extracts 128-dimensional embedding feature vector for a single spectrogram window.
+ */
 async function embedWindow(pcm16k){
     if(!embedExtractor)throw new Error('Embedding extractor not built yet');
     const input=prepareWindowInput(pcm16k);
@@ -1046,6 +1161,9 @@ async function embedWindow(pcm16k){
 }
 
 // ── Embed full clip (slice into windows, embed each, average, L2-normalise) ──
+/**
+ * Computes average 128-dimensional embedding feature vector across full audio clip.
+ */
 async function embedClip(pcmFull){
     const totalSamples=pcmFull.length;
     const windows=[];
@@ -1065,6 +1183,9 @@ async function embedClip(pcmFull){
 }
 
 // ── Decode + resample ────────────────────────────────────────────────────
+/**
+ * Decodes uploaded audio file data and resamples waveform to 16kHz mono Float32 PCM.
+ */
 async function decodeAndResample(blob){
     const ab=await blob.arrayBuffer();
     const decCtx=new AudioContext();
@@ -1079,6 +1200,9 @@ async function decodeAndResample(blob){
 }
 
 // ── PCM -> WAV ────────────────────────────────────────────────────────────
+/**
+ * Converts Float32 16kHz PCM audio sample array into a valid WAV file Blob.
+ */
 function pcmToWav(pcm,sr=16000){
     const n=pcm.length,ds=n*2,buf=new ArrayBuffer(44+ds),v=new DataView(buf);
     const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
@@ -1091,6 +1215,9 @@ function pcmToWav(pcm,sr=16000){
 }
 
 // ── K230 microphone capture over USB raw REPL ───────────────────────────
+/**
+ * Reads incoming serial stream bytes continuously from K230 audio port.
+ */
 async function k230MicRxPump(){
     k230MicRxBuf='';
     try{
@@ -1104,16 +1231,34 @@ async function k230MicRxPump(){
     }
 }
 
+/**
+
+ * Writes text command string to K230 audio serial port.
+
+ */
+
 async function k230MicWrite(data){
     if(!k230MicWriter)throw new Error('K230 serial port is not connected');
     await k230MicWriter.write(typeof data==='string'?ENC.encode(data):data);
 }
+
+/**
+
+ * Releases reader and writer stream locks on open K230 audio serial port.
+
+ */
 
 async function cleanupK230MicPort(){
     await stopK230Monitor();
     await cleanupK230AudioSession(true);
     await closeK230MicTransport();
 }
+
+/**
+
+ * Closes K230 audio serial transport port connection safely.
+
+ */
 
 async function closeK230MicTransport(){
     if(k230MicPort)lastK230VoicePort=k230MicPort;
@@ -1128,6 +1273,12 @@ async function closeK230MicTransport(){
     k230MicRxBuf='';
     k230CommandTail=Promise.resolve();
 }
+
+/**
+
+ * Opens WebSerial port connection to K230 board for microphone audio capture.
+
+ */
 
 async function ensureK230MicConnected(){
     if(k230MicConnected&&k230MicPort?.readable&&k230MicPort?.writable)return;
@@ -1145,6 +1296,12 @@ async function ensureK230MicConnected(){
     k230MicConnected=true;
     k230MicRxPump();
 }
+
+/**
+
+ * Enters MicroPython raw REPL mode on K230 audio serial connection.
+
+ */
 
 async function k230MicEnterRawREPL(){
     await k230CommandTail.catch(()=>{});
@@ -1164,6 +1321,12 @@ async function k230MicEnterRawREPL(){
     }
     throw new Error('K230 raw REPL was not detected. Stop CanMV IDE/serial monitor and reset the board');
 }
+
+/**
+
+ * Executes MicroPython script on K230 audio connection without mutex lock.
+
+ */
 
 async function k230MicExecPyUnlocked(code,timeoutMs=15000){
     k230MicRxBuf='';
@@ -1200,11 +1363,20 @@ async function k230MicExecPyUnlocked(code,timeoutMs=15000){
 
 // Serialize every raw-REPL command. Preview, recording, cleanup, and recovery
 // can never read or clear the shared receive buffer at the same time.
+/**
+ * Executes MicroPython script on K230 audio connection with exclusive lock.
+ */
 function k230MicExecPy(code,timeoutMs=15000){
     const run=k230CommandTail.then(()=>k230MicExecPyUnlocked(code,timeoutMs));
     k230CommandTail=run.catch(()=>{});
     return run;
 }
+
+/**
+
+ * Returns Python script code string to deinitialize audio recording hardware on K230.
+
+ */
 
 function k230AudioCleanupCode(){
     return [
@@ -1223,6 +1395,12 @@ function k230AudioCleanupCode(){
     ].join('\r\n');
 }
 
+/**
+
+ * Stops live audio level monitoring stream from K230 microphone.
+
+ */
+
 async function stopK230Monitor(){
     k230MonitorActive=false;
     if(k230MonitorPromise){
@@ -1230,6 +1408,12 @@ async function stopK230Monitor(){
         k230MonitorPromise=null;
     }
 }
+
+/**
+
+ * Clears active K230 audio stream sessions and resets connection handles.
+
+ */
 
 async function cleanupK230AudioSession(force=false){
     await stopK230Monitor();
@@ -1241,6 +1425,12 @@ async function cleanupK230AudioSession(force=false){
     k230AudioReady=false;
 }
 
+/**
+
+ * Recovers K230 audio serial connection after request timeout occurs.
+
+ */
+
 async function recoverK230AfterTimeout(){
     await stopK230Monitor();
     k230AudioReady=false;
@@ -1250,6 +1440,12 @@ async function recoverK230AfterTimeout(){
     await k230MicExecPy(k230AudioCleanupCode(),6000).catch(()=>{});
     await sleep(500);
 }
+
+/**
+
+ * Initializes audio recording hardware parameters and sample rates on K230 board.
+
+ */
 
 async function setupK230AudioSession(){
     if(k230AudioReady)return;
@@ -1268,6 +1464,12 @@ async function setupK230AudioSession(){
     k230AudioReady=true;
 }
 
+/**
+
+ * Converts 16-bit signed integer PCM byte buffer into normalized Float32 array.
+
+ */
+
 function pcm16BytesToFloat32(raw){
     const pcm=new Float32Array(Math.floor(raw.length/2));
     for(let i=0;i<pcm.length;i++){
@@ -1277,6 +1479,12 @@ function pcm16BytesToFloat32(raw){
     }
     return pcm;
 }
+
+/**
+
+ * Converts hex-encoded text string from K230 serial stream into Uint8Array bytes.
+
+ */
 
 function k230HexToBytes(hexText){
     const hex=hexText.replace(/\s/g,'');
@@ -1288,9 +1496,21 @@ function k230HexToBytes(hexText){
     return raw;
 }
 
+/**
+
+ * Converts hex-encoded PCM text from K230 into Float32 audio sample array.
+
+ */
+
 function k230HexToPcm(hexText){
     return pcm16BytesToFloat32(k230HexToBytes(hexText));
 }
+
+/**
+
+ * Starts live audio volume level monitoring from connected K230 board microphone.
+
+ */
 
 function startK230Monitor(classIdx){
     if(k230MonitorActive||!k230AudioReady)return;
@@ -1313,6 +1533,12 @@ function startK230Monitor(classIdx){
         }
     })();
 }
+
+/**
+
+ * Opens K230 serial microphone connection for dataset audio clip recording.
+
+ */
 
 async function openK230Mic(classIdx){
     if(!backbone||!embedExtractor){setStatus('Backbone not loaded yet.');return;}
@@ -1348,6 +1574,12 @@ async function openK230Mic(classIdx){
         if(currentBtn){currentBtn.disabled=false;currentBtn.textContent=original;}
     }
 }
+
+/**
+
+ * Records fixed duration audio sample clip from connected K230 microphone hardware.
+
+ */
 
 async function recordK230Clip(classIdx){
     if(!backbone||!embedExtractor||activeMicSource!=='k230'||activeMicIdx!==classIdx||isRecording)return;
@@ -1433,6 +1665,9 @@ async function recordK230Clip(classIdx){
 }
 
 // ── ESP32-S3 microphone capture over DFR1154 WebSerial protocol ─────────
+/**
+ * Reads incoming text lines from ESP32-S3 serial microphone connection.
+ */
 async function esp32MicRxPump(reader){
     const decoder=new TextDecoder();
     esp32MicRxBuf='';
@@ -1461,6 +1696,12 @@ async function esp32MicRxPump(reader){
     }
 }
 
+/**
+
+ * Reads next line of text from ESP32-S3 serial stream with timeout limit.
+
+ */
+
 async function esp32MicNextLine(deadline){
     while(Date.now()<deadline){
         if(esp32MicLines.length)return esp32MicLines.shift();
@@ -1470,16 +1711,34 @@ async function esp32MicNextLine(deadline){
     throw new Error('ESP32-S3 audio command timed out');
 }
 
+/**
+
+ * Writes command text string to ESP32-S3 serial microphone port.
+
+ */
+
 async function esp32MicWrite(text){
     if(!esp32MicWriter)throw new Error('ESP32-S3 serial port is not connected');
     await esp32MicWriter.write(ENC.encode(text));
 }
+
+/**
+
+ * Wraps serial task execution with exclusive ESP32-S3 mutex lock.
+
+ */
 
 function esp32MicRunExclusive(task){
     const run=esp32MicCommandTail.then(task);
     esp32MicCommandTail=run.catch(()=>{});
     return run;
 }
+
+/**
+
+ * Sends command to ESP32-S3 serial port and waits for OK response token without lock.
+
+ */
 
 async function esp32MicSimpleCommandUnlocked(command,okToken,timeoutMs=8000){
     esp32MicLines.length=0;
@@ -1492,9 +1751,21 @@ async function esp32MicSimpleCommandUnlocked(command,okToken,timeoutMs=8000){
     }
 }
 
+/**
+
+ * Sends command to ESP32-S3 serial port and waits for OK response with mutex lock.
+
+ */
+
 function esp32MicSimpleCommand(command,okToken,timeoutMs=8000){
     return esp32MicRunExclusive(()=>esp32MicSimpleCommandUnlocked(command,okToken,timeoutMs));
 }
+
+/**
+
+ * Captures raw 16kHz PCM audio samples from ESP32-S3 serial connection without lock.
+
+ */
 
 async function esp32MicCapturePcmUnlocked(sampleCount,timeoutMs=30000){
     esp32MicLines.length=0;
@@ -1542,9 +1813,21 @@ async function esp32MicCapturePcmUnlocked(sampleCount,timeoutMs=30000){
     }
 }
 
+/**
+
+ * Captures raw PCM audio samples from ESP32-S3 microphone with exclusive lock.
+
+ */
+
 function esp32MicCapturePcm(sampleCount,timeoutMs=30000){
     return esp32MicRunExclusive(()=>esp32MicCapturePcmUnlocked(sampleCount,timeoutMs));
 }
+
+/**
+
+ * Opens WebSerial port connection to ESP32-S3 board for microphone stream access.
+
+ */
 
 async function ensureEsp32MicConnected(){
     if(esp32MicConnected&&esp32MicPort?.readable&&esp32MicPort?.writable)return;
@@ -1569,6 +1852,12 @@ async function ensureEsp32MicConnected(){
     }
 }
 
+/**
+
+ * Stops live audio volume monitoring stream on ESP32-S3 microphone.
+
+ */
+
 async function stopEsp32Monitor(){
     esp32MonitorActive=false;
     if(esp32MonitorPromise){
@@ -1576,6 +1865,12 @@ async function stopEsp32Monitor(){
         esp32MonitorPromise=null;
     }
 }
+
+/**
+
+ * Halts background audio inference streaming loop from ESP32-S3 serial mic.
+
+ */
 
 async function stopEsp32InferencePump(){
     const shouldStop=esp32InferActive||!!esp32InferPromise;
@@ -1589,6 +1884,12 @@ async function stopEsp32InferencePump(){
     }
 }
 
+/**
+
+ * Clears active ESP32-S3 audio sessions and resets serial connection handles.
+
+ */
+
 async function cleanupEsp32AudioSession(){
     await stopEsp32Monitor();
     await stopEsp32InferencePump();
@@ -1598,6 +1899,12 @@ async function cleanupEsp32AudioSession(){
     esp32Waveform=new Float32Array(1024);
     esp32InferWaveform=new Float32Array(1024);
 }
+
+/**
+
+ * Closes ESP32-S3 serial transport port connection safely.
+
+ */
 
 async function closeEsp32MicTransport(){
     const previousClose=esp32MicClosePromise;
@@ -1619,10 +1926,22 @@ async function closeEsp32MicTransport(){
     esp32MicRxBuf='';esp32MicLines=[];esp32MicCommandTail=Promise.resolve();
 }
 
+/**
+
+ * Releases reader and writer stream locks on ESP32-S3 serial audio port.
+
+ */
+
 async function cleanupEsp32MicPort(){
     await cleanupEsp32AudioSession();
     await closeEsp32MicTransport();
 }
+
+/**
+
+ * Starts live audio level monitoring using connected ESP32-S3 microphone.
+
+ */
 
 function startEsp32Monitor(classIdx){
     if(esp32MonitorActive||!esp32MicConnected)return;
@@ -1644,6 +1963,12 @@ function startEsp32Monitor(classIdx){
         esp32MonitorActive=false;
     })();
 }
+
+/**
+
+ * Opens ESP32-S3 microphone hardware for collecting dataset audio samples.
+
+ */
 
 async function openEsp32Mic(classIdx){
     if(!backbone||!embedExtractor){setStatus('Backbone not loaded yet.');return;}
@@ -1674,6 +1999,12 @@ async function openEsp32Mic(classIdx){
         if(currentBtn){currentBtn.disabled=false;currentBtn.textContent=original;}
     }
 }
+
+/**
+
+ * Captures fixed duration audio sample clip from ESP32-S3 microphone over serial.
+
+ */
 
 async function recordEsp32Clip(classIdx){
     if(!backbone||!embedExtractor||activeMicSource!=='esp32'||activeMicIdx!==classIdx||isRecording)return;
@@ -1720,6 +2051,9 @@ async function recordEsp32Clip(classIdx){
 }
 
 // ── Laptop-mic input Setting mode ─────────────────────────────────────────
+/**
+ * Switches microphone input mode (Auto or Setting) and updates UI panels.
+ */
 function setInputMode(mode){
     inputMode=(mode==='setting')?'setting':'auto';
     const panel=document.getElementById('inputSettingPanel');
@@ -1734,6 +2068,12 @@ function setInputMode(mode){
     }
     setStatus(inputMode==='setting'?'Manual input settings enabled (laptop mic).':'Auto input mode.');
 }
+
+/**
+
+ * Enumerates available system audio input devices into selection dropdown list.
+
+ */
 
 async function populateMicDevices(){
     const sel=document.getElementById('micDeviceSelect');if(!sel)return;
@@ -1751,6 +2091,12 @@ async function populateMicDevices(){
     }catch(e){console.warn('enumerateDevices failed:',e);}
 }
 
+/**
+
+ * Handles microphone device selection changes in settings dropdown.
+
+ */
+
 function onMicDeviceChange(){
     const sel=document.getElementById('micDeviceSelect');if(!sel)return;
     inputMicDeviceId=sel.value;saveInputSettings();
@@ -1758,6 +2104,12 @@ function onMicDeviceChange(){
         const idx=activeMicIdx;stopMic().then(()=>openMic(idx));
     }
 }
+
+/**
+
+ * Toggles automatic gain control (AGC) setting for active microphone input stream.
+
+ */
 
 function onAgcChange(v){
     inputAgc=(v==='on');saveInputSettings();
@@ -1767,6 +2119,12 @@ function onAgcChange(v){
     }
 }
 
+/**
+
+ * Applies manual gain node multiplier value to active web audio context.
+
+ */
+
 function applyManualGain(){
     // Manual mode drives the capture GainNode; target mode holds it at unity and
     // normalizes each clip after recording instead.
@@ -1774,7 +2132,19 @@ function applyManualGain(){
     if(micGainNode&&micAudioCtx)micGainNode.gain.setTargetAtTime(g,micAudioCtx.currentTime,0.01);
 }
 
+/**
+
+ * Clamps decibel input value within specified minimum and maximum boundaries.
+
+ */
+-
 function clampDb(v,lo,hi){v=parseInt(v);if(isNaN(v))v=0;return Math.max(lo,Math.min(hi,v));}
+
+/**
+
+ * Updates microphone input gain dB setting from slider control.
+
+ */
 
 function onInputGainChange(v){
     inputGainDb=clampDb(v,-12,24);
@@ -1782,12 +2152,24 @@ function onInputGainChange(v){
     applyManualGain();saveInputSettings();
 }
 
+/**
+
+ * Updates microphone input gain dB setting from numeric input field.
+
+ */
+
 function onInputGainNum(v){
     inputGainDb=clampDb(v,-12,24);
     const sl=document.getElementById('inputGainSlider');if(sl)sl.value=inputGainDb;
     const num=document.getElementById('inputGainNum');if(num)num.value=inputGainDb;
     applyManualGain();saveInputSettings();
 }
+
+/**
+
+ * Switches microphone gain control mode between Auto and Manual settings.
+
+ */
 
 function onLevelModeChange(mode){
     inputLevelMode=(mode==='target')?'target':'manual';
@@ -1801,6 +2183,12 @@ function onLevelModeChange(mode){
     saveInputSettings();
 }
 
+/**
+
+ * Updates target peak audio normalization level setting in dBFS.
+
+ */
+
 function onTargetLevelChange(v){
     inputTargetDbfs=clampDb(v,-40,-3);
     const num=document.getElementById('targetLevelNum');if(num)num.value=inputTargetDbfs;
@@ -1813,6 +2201,9 @@ function onTargetLevelChange(v){
 // NOT recomputed: normalization makes the model level-independent, so the
 // re-levelled clips produce identical features — this only changes the stored
 // waveform level (and the WAVs later exported to the ESP32 server).
+/**
+ * Re-applies target peak normalization level to all collected dataset audio clips.
+ */
 function relevelAllClips(){
     if(inputMode!=='setting'||inputLevelMode!=='target'){
         alert('Switch Level Mode to "Target level" first.');return;
@@ -1834,6 +2225,9 @@ function relevelAllClips(){
 // affects the stored waveform level (detection is normalized regardless). Gain
 // is capped so near-silent clips don't blow up the noise floor, and the result
 // is hard-limited to [-1,1] so it can't clip.
+/**
+ * Scales Float32 PCM audio samples to match target peak dBFS normalization level.
+ */
 function applyTargetLevel(pcm,targetDbfs){
     let sumsq=0;for(let i=0;i<pcm.length;i++)sumsq+=pcm[i]*pcm[i];
     const rms=Math.sqrt(sumsq/Math.max(1,pcm.length));
@@ -1847,11 +2241,20 @@ function applyTargetLevel(pcm,targetDbfs){
 }
 
 // ── Persist input settings across sessions ────────────────────────────────
+/**
+ * Saves microphone input gain and level settings to browser localStorage.
+ */
 function saveInputSettings(){
     try{localStorage.setItem('curio_input_settings',JSON.stringify({
         inputMode,inputLevelMode,inputGainDb,inputTargetDbfs,inputAgc,inputMicDeviceId
     }));}catch(e){}
 }
+
+/**
+
+ * Restores microphone input gain settings from localStorage on startup.
+
+ */
 
 function loadInputSettings(){
     let s=null;try{s=JSON.parse(localStorage.getItem('curio_input_settings')||'null');}catch(e){}
@@ -1875,6 +2278,12 @@ function loadInputSettings(){
     document.querySelectorAll('input[name="agcMode"]').forEach(r=>{r.checked=(r.value===(inputAgc?'on':'off'));});
     if(inputMode==='setting')populateMicDevices();
 }
+
+/**
+
+ * Starts real-time VU audio level meter animation loop.
+
+ */
 
 function startInputLevelMeter(){
     stopInputLevelMeter();
@@ -1900,6 +2309,12 @@ function startInputLevelMeter(){
     micLevelRaf=requestAnimationFrame(tick);
 }
 
+/**
+
+ * Stops VU audio level meter animation and resets meter display fill bar.
+
+ */
+
 function stopInputLevelMeter(){
     if(micLevelRaf){cancelAnimationFrame(micLevelRaf);micLevelRaf=null;}
     const fill=document.getElementById('inputLevelFill');const val=document.getElementById('inputLevelVal');
@@ -1908,6 +2323,9 @@ function stopInputLevelMeter(){
 }
 
 // ── Mic capture ──────────────────────────────────────────────────────────
+/**
+ * Opens browser microphone input stream for recording training audio clips.
+ */
 async function openMic(classIdx){
     if(!backbone||!embedExtractor){setStatus('Backbone not loaded yet.');return;}
     if(micActive)await stopInference();
@@ -1940,7 +2358,19 @@ async function openMic(classIdx){
     }catch(e){alert('Mic error: '+e.message);}
 }
 
+/**
+
+ * Converts decibel value into linear gain multiplier float value.
+
+ */
+
 function dbToGain(db){return Math.pow(10,db/20);}
+
+/**
+
+ * Stops active browser microphone stream and resets audio context handles.
+
+ */
 
 async function stopMic(){
     if(isRecording){setStatus('Recording in progress — please wait for this clip to finish.');return;}
@@ -1955,6 +2385,12 @@ async function stopMic(){
     esp32Waveform=new Float32Array(1024);
     render();setStatus('Mic stopped.');
 }
+
+/**
+
+ * Animates real-time audio volume level meter and waveform canvas for active mic.
+
+ */
 
 function animateMicVis(classIdx){
     const canvas=document.getElementById('mic-vis-'+classIdx);
@@ -1985,6 +2421,12 @@ function animateMicVis(classIdx){
         ctx.stroke();
     }
 }
+
+/**
+
+ * Records fixed duration audio clip sample from browser microphone into dataset.
+
+ */
 
 async function recordClip(classIdx){
     if(!backbone||!embedExtractor||activeMicSource!=='laptop'||activeMicIdx!==classIdx||isRecording)return;
@@ -2023,15 +2465,30 @@ async function recordClip(classIdx){
     finally{isRecording=false;clearInterval(recProgTimer);if(progFill)progFill.style.width='0%';}
 }
 
+/**
+
+ * Begins continuous audio clip recording loop while hold button is pressed.
+
+ */
+
 function startHold(classIdx){
     if(activeMicSource==='k230')recordK230Clip(classIdx);
     else if(activeMicSource==='esp32')recordEsp32Clip(classIdx);
     else recordClip(classIdx);
 }
+/**
+ * Stops continuous hold audio recording loop.
+ */
 function stopHold(){}
 
 // ── Thumbnails ────────────────────────────────────────────────────────────
 let playingCtx=null;
+
+/**
+
+ * Draws miniature waveform preview visualization onto HTML canvas element.
+
+ */
 
 function drawWaveThumb(canvas,pcm,color){
     const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
@@ -2041,6 +2498,12 @@ function drawWaveThumb(canvas,pcm,color){
     for(let i=0;i<W;i++){let sum=0;for(let j=0;j<step;j++)sum+=Math.abs(pcm[i*step+j]||0);const amp=(sum/step)*H*2.5;const y=H/2-amp/2;i===0?ctx.moveTo(i,H/2):ctx.lineTo(i,Math.max(1,Math.min(H-1,y)));}
     ctx.stroke();
 }
+
+/**
+
+ * Plays back recorded Float32 audio clip sample using Web Audio API context.
+
+ */
 
 async function playClip(classIdx,clipIdx,btnEl){
     if(playingCtx){try{playingCtx.close();}catch{}playingCtx=null;}
@@ -2057,6 +2520,12 @@ async function playClip(classIdx,clipIdx,btnEl){
     }catch(e){setStatus('Playback error: '+e.message);}
 }
 
+/**
+
+ * Appends audio clip sample thumbnail card with waveform and play button to UI card.
+
+ */
+
 function addThumb(classIdx,pcm,emb,clipIdx){
     const cls=classes[classIdx];
     const thumbsEl=document.getElementById('thumbs-'+classIdx);if(!thumbsEl)return;
@@ -2071,7 +2540,16 @@ function addThumb(classIdx,pcm,emb,clipIdx){
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
+/**
+ * Master UI render function updating class cards, statistics, and prediction bars.
+ */
 function render(){renderClasses();renderStats();initOutputBars();}
+
+/**
+
+ * Renders HTML cards for dataset classes including sample thumbnails and controls.
+
+ */
 
 function renderClasses(){
     const container=document.getElementById('classList');container.innerHTML='';
@@ -2134,6 +2612,12 @@ function renderClasses(){
     });
 }
 
+/**
+
+ * Updates dataset summary list showing recorded clip sample counts per class.
+
+ */
+
 function renderStats(){
     document.getElementById('statList').innerHTML=classes.map(cls=>`
         <div class="stat-row">
@@ -2191,12 +2675,24 @@ async function reembedRestoredAudio(){
 }
 
 // ── Class management ──────────────────────────────────────────────────────
+/**
+ * Adds a new voice dataset class with default name like "Word1" and assigned color.
+ */
 function addClass(){const id=nextClassId++;classes.push({id,name:'Word'+id,color:COLORS[(id-1)%COLORS.length]});render();}
+/**
+ * Adds a dedicated "Background Noise" class for training ambient background sound.
+ */
 function addNoiseClass(){if(classes.find(c=>isNoise(c.name))){alert('Noise class already exists!');return;}classes.push({id:nextClassId++,name:'Background Noise',color:'#fbbf24'});render();setStatus('Noise class added — record silence or ambient room sound.');}
+/**
+ * Deletes a voice dataset class and its recorded audio clip samples.
+ */
 async function removeClass(idx){if(classes.length<=2){alert('Need at least 2 classes');return;}if(isRecording){alert('Wait for recording to finish first.');return;}if(activeMicIdx===idx)await stopMic();const cls=classes[idx];delete embeddings[cls.name];delete classAudio[cls.name];classes.splice(idx,1);trained=false;updateButtons();render();}
 function renameClass(idx,name){const cls=classes[idx];const old=cls.name;if(old===name)return;if(embeddings[old]){embeddings[name]=embeddings[old];delete embeddings[old];}if(classAudio[old]){classAudio[name]=classAudio[old];delete classAudio[old];}cls.name=name;renderStats();const lEl=document.getElementById('output-label-'+idx);if(lEl){lEl.textContent=name;lEl.style.color=cls.color;}}
 
 // ── Extract x2 ────────────────────────────────────────────────────────────
+/**
+ * Extracts multiple fixed-length audio clips from an uploaded audio file.
+ */
 function extractClips(classIdx){
     const cls=classes[classIdx];const embs=embeddings[cls.name]||[];const audio=classAudio[cls.name]||[];
     if(embs.length===0){alert('No clips to extract.');return;}
@@ -2211,6 +2707,9 @@ function extractClips(classIdx){
 }
 
 // ── Upload WAV ────────────────────────────────────────────────────────────
+/**
+ * Opens file picker allowing users to upload local WAV audio files into a class.
+ */
 function uploadWav(classIdx){
     const cls=classes[classIdx];
     const input=document.createElement('input');input.type='file';input.accept='audio/*';input.multiple=true;
@@ -2238,6 +2737,9 @@ function uploadWav(classIdx){
 }
 
 // ── Download ──────────────────────────────────────────────────────────────
+/**
+ * Packs recorded audio clips for a class into a downloadable ZIP archive.
+ */
 async function downloadClassClips(classIdx){
     const cls=classes[classIdx];const clips=classAudio[cls.name]||[];
     if(clips.length===0){alert('No clips recorded yet.');return;}
@@ -2248,6 +2750,12 @@ async function downloadClassClips(classIdx){
     downloadBlob(blob,fn+'_clips.zip');
     setStatus('Downloaded '+clips.length+' WAV clips for "'+cls.name+'"');
 }
+
+/**
+
+ * Packs all dataset audio clips across all classes into a ZIP archive.
+
+ */
 
 async function downloadAllClips(){
     const total=Object.values(classAudio).reduce((s,a)=>s+a.length,0);
@@ -2261,6 +2769,9 @@ async function downloadAllClips(){
 }
 
 // ── Output bars ────────────────────────────────────────────────────────────
+/**
+ * Initializes confidence progress bar containers for voice prediction panel.
+ */
 function initOutputBars(){
     document.getElementById('outputBars').innerHTML=classes.map((cls,i)=>`
         <div class="output-row">
@@ -2273,6 +2784,12 @@ function initOutputBars(){
             </div>
         </div>`).join('');
 }
+
+/**
+
+ * Updates live confidence progress bars with real-time class probabilities.
+
+ */
 
 function updateOutputBars(probs){
     const best=probs.reduce((a,b)=>a.score>b.score?a:b);
@@ -2298,7 +2815,16 @@ function updateOutputBars(probs){
 }
 
 // ── Train ─────────────────────────────────────────────────────────────────
+/**
+ * Updates HTML content of model training status card element.
+ */
 function setTrainState(html){document.getElementById('trainStateBox').innerHTML=html;}
+
+/**
+
+ * Trains neural network classifier head in-browser using audio feature embeddings.
+
+ */
 
 async function trainModel(){
     if(!backbone||!embedExtractor){alert('Backbone not loaded yet.');return;}
@@ -2323,6 +2849,9 @@ async function trainModel(){
         // sigma=0.04 → 4% perturbation (meaningful but not destructive)
         // sigma=0.08 → 8% perturbation (larger variation, more robust)
         // Each original produces 2 copies → 3x total dataset size
+        /**
+         * Generates random number from normal distribution for weight initialization.
+         */
         function randn(){
             let u=0,v=0;
             while(u===0)u=Math.random();
@@ -2403,10 +2932,25 @@ async function trainModel(){
     }finally{document.getElementById('trainBtn').disabled=false;}
 }
 
+/**
+
+ * Resets trained voice model weights and restores training status card ready state.
+
+ */
+
 async function resetTrain(){await stopInference();trained=false;headModel=null;classNamesCopy=[];updateButtons();setTrainState('<div class="state-ready"><div class="icon">🧠</div><h3>Ready to train.</h3><p>Add at least 5 clips per class<br>then press Train.</p></div>');setStatus('');initOutputBars();}
 
 // ── Live inference ────────────────────────────────────────────────────────
+/**
+ * Restarts continuous voice inference timer with updated interval setting.
+ */
 function restartInferTimer(){clearInterval(inferTimer);inferTimer=setInterval(runInference,INFER_MS);}
+
+/**
+
+ * Runs continuous voice prediction on latest 1-second audio buffer window.
+
+ */
 
 async function runInference(){
     if(!micActive||!headModel||!embedExtractor||!inferBuf)return;
@@ -2441,6 +2985,12 @@ async function runInference(){
     finally{inferRunning=false;}
 }
 
+/**
+
+ * Draws real-time audio waveform visualization canvas for live prediction preview.
+
+ */
+
 function drawWaveVis(){
     if(!micActive)return;visFrame=requestAnimationFrame(drawWaveVis);
     const canvas=document.getElementById('waveCanvas');if(!canvas)return;
@@ -2462,6 +3012,12 @@ function drawWaveVis(){
     ctx.stroke();
 }
 
+/**
+
+ * Appends new PCM audio samples to rolling live inference audio buffer window.
+
+ */
+
 function appendInferencePcm(pcm){
     if(!inferBuf)return;
     for(let i=0;i<pcm.length;i++){
@@ -2470,6 +3026,12 @@ function appendInferencePcm(pcm){
     }
 }
 
+/**
+
+ * Stops background audio inference streaming loop from K230 board.
+
+ */
+
 async function stopK230InferencePump(){
     k230InferActive=false;
     if(k230InferPromise){
@@ -2477,6 +3039,12 @@ async function stopK230InferencePump(){
         k230InferPromise=null;
     }
 }
+
+/**
+
+ * Resets live prediction preview UI controls to stopped state.
+
+ */
 
 function setPreviewStoppedUi(message='Mic stopped.'){
     document.getElementById('wavePlaceholder').style.display='flex';
@@ -2487,6 +3055,12 @@ function setPreviewStoppedUi(message='Mic stopped.'){
     const esp32Btn=document.getElementById('esp32InferBtn');if(esp32Btn)esp32Btn.textContent='ESP32-S3 Mic';
     setStatus(message);
 }
+
+/**
+
+ * Starts continuous audio prediction loop streaming from K230 board microphone.
+
+ */
 
 function startK230InferencePump(){
     if(k230InferActive||!k230AudioReady)return;
@@ -2526,6 +3100,12 @@ function startK230InferencePump(){
         }
     })();
 }
+
+/**
+
+ * Starts continuous audio prediction loop streaming from ESP32-S3 board microphone.
+
+ */
 
 function startEsp32InferencePump(){
     if(esp32InferActive||!esp32MicConnected)return;
@@ -2594,6 +3174,12 @@ function startEsp32InferencePump(){
     })();
 }
 
+/**
+
+ * Toggles live microphone prediction preview using browser microphone.
+
+ */
+
 async function toggleMic(){
     if(!trained||!headModel){alert('Train first!');return;}
     if(micActive&&inferSource==='laptop'){await stopInference();return;}
@@ -2613,6 +3199,12 @@ async function toggleMic(){
         drawWaveVis();restartInferTimer();setStatus('Laptop live preview — speak into the mic');
     }catch(e){alert('Mic error: '+e.message);}
 }
+
+/**
+
+ * Toggles live voice prediction testing using connected K230 board microphone.
+
+ */
 
 async function toggleK230Inference(){
     if(!trained||!headModel){alert('Train first!');return;}
@@ -2644,6 +3236,12 @@ async function toggleK230Inference(){
     }
 }
 
+/**
+
+ * Toggles live voice prediction testing using connected ESP32-S3 microphone.
+
+ */
+
 async function toggleEsp32Inference(){
     if(!trained||!headModel){alert('Train first!');return;}
     if(micActive&&inferSource==='esp32'){await stopInference();return;}
@@ -2673,6 +3271,12 @@ async function toggleEsp32Inference(){
     }
 }
 
+/**
+
+ * Halts active voice inference loops and stops audio stream processing.
+
+ */
+
 async function stopInference(){
     clearInterval(inferTimer);if(visFrame){cancelAnimationFrame(visFrame);visFrame=null;}
     if(inferSource==='k230'){
@@ -2692,6 +3296,9 @@ async function stopInference(){
 }
 
 // ── Reset ─────────────────────────────────────────────────────────────────
+/**
+ * Sends hardware reset signal over WebSerial to reboot K230 board.
+ */
 async function resetK230VoiceBoard(){
     if(!SERIAL_SUPPORTED){alert('Reset K230 requires desktop Chrome or Edge with WebSerial.');return;}
     if(isRecording){alert('Wait for recording to finish first.');return;}
@@ -2744,6 +3351,12 @@ async function resetK230VoiceBoard(){
         if(btn){btn.disabled=false;btn.innerHTML=original;}
     }
 }
+
+/**
+
+ * Sends serial RESET command over WebSerial to restart attached ESP32-S3 board.
+
+ */
 
 async function resetEsp32VoiceBoard(){
     if(!SERIAL_SUPPORTED){alert('Reset ESP32-S3 requires desktop Chrome or Edge with WebSerial.');return;}
@@ -2802,6 +3415,12 @@ async function resetEsp32VoiceBoard(){
     }
 }
 
+/**
+
+ * Resets all dataset classes, trained models, and recorded audio clips.
+
+ */
+
 async function resetAll(){
     if(!confirm('Reset everything? Clears all clips and the model.'))return;
     if(isRecording){alert('Wait for recording to finish first.');return;}
@@ -2816,6 +3435,9 @@ async function resetAll(){
 }
 
 // ── Deploy to Blockly ─────────────────────────────────────────────────────
+/**
+ * Deploys trained voice class names to Blockly workspace blocks via window message.
+ */
 function deployToBlockly(){
     if(!trained){alert('Train first!');return;}
     const classNames=classes.map(c=>c.name);
@@ -2830,6 +3452,9 @@ function deployToBlockly(){
 }
 
 // ── Deploy to K230 ────────────────────────────────────────────────────────
+/**
+ * Deploys compiled voice model directly to K230 board over Wi-Fi or WebSerial.
+ */
 async function deployToK230(){
     if(!trained||!headModel){alert('Train first!');return;}
     if(isRecording){alert('Wait for recording to finish first.');return;}
@@ -2918,6 +3543,9 @@ async function deployToK230(){
 }
 
 // ── Full voice model export helper ─────────────────────────────────────
+/**
+ * Combines MobileNet audio backbone and trained head into single model graph.
+ */
 function buildFullVoiceModel(){
     if(!backbone||!embedExtractor||!headModel){
         throw new Error('Voice backbone, embed extractor, and trained head model are required');
@@ -2930,6 +3558,9 @@ function buildFullVoiceModel(){
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
+/**
+ * Exports compiled voice model `.kmodel` and `labels.txt` for K230 board.
+ */
 async function exportKmodel(){
     if(!trained||!headModel){alert('Train first!');return;}
     const btn=document.getElementById('exportBtn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Building...';setStatus('Exporting: building full model...');
@@ -2986,6 +3617,12 @@ async function exportKmodel(){
     finally{btn.disabled=false;btn.innerHTML='Export .kmodel (Local)';}
 }
 
+/**
+
+ * Builds lightweight CNN model optimized for microcontroller voice inference.
+
+ */
+
 function _buildVoiceMicroCnn(nc) {
     const m = tf.sequential();
     m.add(tf.layers.conv2d({ inputShape: [43, 232, 1], filters: 8, kernelSize: [5, 5], strides: [2, 2], padding: 'same', activation: 'relu' }));
@@ -2998,13 +3635,31 @@ function _buildVoiceMicroCnn(nc) {
     return m;
 }
 
+/**
+
+ * Trains small voice CNN in-browser and exports INT8 TFLite model package.
+
+ */
+
 async function exportVoiceTflite() {
     await exportVoiceTfliteCore(false);
 }
 
+/**
+
+ * Uploads trained voice TFLite model directly to ESP32-S3 over WebSerial link.
+
+ */
+
 async function deployVoiceToEsp32() {
     await exportVoiceTfliteCore(true);
 }
+
+/**
+
+ * Core pipeline converting voice dataset into INT8 TFLite model package.
+
+ */
 
 async function exportVoiceTfliteCore(isSerialUpload) {
     if (classes.length < 2) { alert('Need at least 2 classes!'); return; }
@@ -3034,9 +3689,18 @@ async function exportVoiceTfliteCore(isSerialUpload) {
         const nc = classes.length;
         const labels = classes.map(c => c.name);
 
+        /**
+
+         * Encodes raw Float32 audio sample array into standard binary WAV file Blob.
+
+         */
+
         function encodeWAV(samples, sampleRate) {
             const buffer = new ArrayBuffer(44 + samples.length * 2);
             const view = new DataView(buffer);
+            /**
+             * Helper function writing ASCII string bytes into a DataView binary buffer.
+             */
             function writeString(view, offset, string) {
                 for (let i = 0; i < string.length; i++) {
                     view.setUint8(offset + i, string.charCodeAt(i));
@@ -3315,6 +3979,12 @@ const _dfr1154 = {
     rxBuf: '',
 };
 
+/**
+
+ * Closes open DFR1154 WebSerial upload port handles safely.
+
+ */
+
 async function cleanupDfr1154Port() {
     const devicePort=_dfr1154.port,reader=_dfr1154.reader,writer=_dfr1154.writer;
     if(devicePort)lastEsp32VoicePort=devicePort;
@@ -3327,6 +3997,12 @@ async function cleanupDfr1154Port() {
     try{devicePort&&await devicePort.close();}catch{}
 }
 
+/**
+
+ * Updates DFR1154 serial connection status message and visual indicator dot.
+
+ */
+
 function dfr1154SetStatus(msg, connected) {
     const dot = document.getElementById('serialDot');
     const st  = document.getElementById('serialStatusMsg');
@@ -3334,12 +4010,24 @@ function dfr1154SetStatus(msg, connected) {
     if (st)  st.textContent = msg;
 }
 
+/**
+
+ * Logs timestamped communication text to DFR1154 upload debug log window.
+
+ */
+
 function dfr1154Log(s) {
     const box = document.getElementById('serialLog');
     if (!box) return;
     box.classList.add('active');
     box.textContent = '[' + new Date().toLocaleTimeString() + '] ' + s + '\n' + box.textContent;
 }
+
+/**
+
+ * Reads single line of text from DFR1154 serial stream with timeout limit.
+
+ */
 
 async function dfr1154ReadLine(timeoutMs = 10000) {
     const deadline = Date.now() + timeoutMs;
@@ -3364,6 +4052,12 @@ async function dfr1154ReadLine(timeoutMs = 10000) {
     }
 }
 
+/**
+
+ * Reads serial lines continuously until expected matching text line arrives.
+
+ */
+
 async function dfr1154Expect(matchFn, timeoutMs = 10000) {
     while (true) {
         const line = await dfr1154ReadLine(timeoutMs);
@@ -3372,15 +4066,33 @@ async function dfr1154Expect(matchFn, timeoutMs = 10000) {
     }
 }
 
+/**
+
+ * Writes UTF-8 text string to DFR1154 serial output stream.
+
+ */
+
 async function dfr1154Write(text) {
     await _dfr1154.writer.write(new TextEncoder().encode(text));
 }
+
+/**
+
+ * Sends serial command to DFR1154 board and waits for OK response token.
+
+ */
 
 async function dfr1154SendCommand(cmd, okToken, timeoutMs = 10000) {
     dfr1154Log('→ ' + cmd);
     await dfr1154Write(cmd + '\n');
     return dfr1154Expect(l => l.includes('SERIAL OK ' + okToken), timeoutMs);
 }
+
+/**
+
+ * Pings DFR1154 board repeatedly over serial until firmware responds with READY or PONG.
+
+ */
 
 async function dfr1154WaitReady() {
     const deadline = Date.now() + 12000;
@@ -3404,6 +4116,9 @@ async function dfr1154WaitReady() {
 }
 
 // ── Go Back ───────────────────────────────────────────────────────────────
+/**
+ * Stops audio capture streams and navigates back to workspace or parent window.
+ */
 async function goBack(){
     if(isRecording){alert('Wait for recording to finish first.');return;}
     await stopMic();await stopInference();
