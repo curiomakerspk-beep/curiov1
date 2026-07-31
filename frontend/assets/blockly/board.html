@@ -79,8 +79,12 @@
                 window.parent.postMessage(payload, '*');
                 window.opener?.postMessage(payload, '*');
             } else {
-                // Standalone browser — navigate directly back to the workspace
-                if (type === 'BOARD_SELECTED') window.location.href = 'index.html';
+                // Standalone browser — navigate directly back to the workspace.
+                // Pass the board via a query param too: localStorage can silently
+                // fail to persist across this navigation on some mobile/private
+                // browsers, so the query string is a same-request fallback that
+                // index.html can always read regardless of storage policy.
+                if (type === 'BOARD_SELECTED') window.location.href = 'index.html?board=' + encodeURIComponent(extra.board);
                 if (type === 'CLOSE_BOARD') window.location.href = 'index.html';
             }
         }

@@ -3552,48 +3552,33 @@
             }
         }
 
-        /**
-        
-         * Records fixed duration audio clip sample from browser microphone into dataset.
-        
-         */
-
-        async function recordClip(classIdx) {
-            if (!backbone || !embedExtractor || activeMicSource !== 'laptop' || activeMicIdx !== classIdx || isRecording) return;
-            const cls = classes[classIdx];
-            isRecording = true; recStartTime = Date.now();
-            const progFill = document.getElementById('rec-prog-' + classIdx);
-            if (progFill) { const total = CLIP_MS; recProgTimer = setInterval(() => { const elapsed = Date.now() - recStartTime; const pct = Math.min(100, (elapsed / total) * 100); progFill.style.width = pct + '%'; if (pct >= 100) clearInterval(recProgTimer); }, 30); }
-            try {
-                const chunks = [];
-                // Record the gain-processed stream so the Setting-mode Input Gain slider
-                // actually affects the captured clip. Falls back to the raw stream.
-                const recStream = (micRecordDest && micRecordDest.stream) || micStream;
-                const mr = new MediaRecorder(recStream);
-                mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-                mr.start(100);
-                await sleep(CLIP_MS);
-                await new Promise(res => { mr.onstop = res; mr.stop(); });
-                clearInterval(recProgTimer); if (progFill) progFill.style.width = '100%';
-                setStatus('Processing clip...');
-                const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
-                let pcm = await decodeAndResample(blob);
-                // Target-level mode: auto-scale this clip's RMS to the chosen dBFS.
-                if (inputMode === 'setting' && inputLevelMode === 'target') pcm = applyTargetLevel(pcm, inputTargetDbfs);
-                if (!classAudio[cls.name]) classAudio[cls.name] = [];
-                classAudio[cls.name].push(pcm.slice());
-                const emb = await embedClip(pcm);
-                if (!embeddings[cls.name]) embeddings[cls.name] = [];
-                embeddings[cls.name].push(emb);
-                const count = embeddings[cls.name].length;
-                const countEl = document.getElementById('cc-count-' + classIdx); if (countEl) countEl.textContent = count + ' clips';
-                const visCount = document.getElementById('vis-count-' + classIdx); if (visCount) visCount.textContent = count + ' clips';
-                addThumb(classIdx, pcm, emb, count - 1); renderStats();
-                trained = false; updateButtons();
-                setStatus('Clip ' + count + ' for "' + cls.name + '" — ' + (pcm.length / SR).toFixed(2) + 's -> ' + computeNWindows(CLIP_MS) + ' windows -> ' + EMBED_DIM + '-dim');
-            } catch (e) { setStatus('Record error: ' + e.message); console.error(e); }
-            finally { isRecording = false; clearInterval(recProgTimer); if (progFill) progFill.style.width = '0%'; }
-        }
+                <div class="k230-settings">
+                    <div class="k230-row">
+                        <span>Method:</span>
+                        <select class="k230-select" id="deployMethodInput"
+                            onchange="onDeployMethodChange(this.value)">
+                            <option value="wifi" selected>Wi-Fi</option>
+                            <option value="usb">USB (WebSerial)</option>
+                        </select>
+                    </div>
+                    <div class="k230-row" id="wifiRow">
+                        <span>K230 IP:</span>
+                        <input type="text" class="k230-input" id="k230IpInput"
+                            value="192.168.4.1" style="width:110px">
+                        <span>Port:</span>
+                        <input type="text" class="k230-input" id="k230PortInput"
+                            value="8080" style="width:50px">
+                    </div>
+                    <div class="k230-row" id="usbBaudRow" style="display:none">
+                        <span>Baud:</span>
+                        <select class="k230-select" id="usbBaudSelect">
+                            <option value="115200">115200 &#x2014; safe</option>
+                            <option value="921600" selected>921600 &#x2014; fast</option>
+                            <option value="1500000">1500000 &#x2014; faster</option>
+                            <option value="3000000">3000000 &#x2014; fastest</option>
+                        </select>
+                    </div>
+                </div>
 
         /**
         
@@ -3614,19 +3599,645 @@
         // ── Thumbnails ────────────────────────────────────────────────────────────
         let playingCtx = null;
 
-        /**
-        
-         * Draws miniature waveform preview visualization onto HTML canvas element.
-        
-         */
+</div>
 
-        function drawWaveThumb(canvas, pcm, color) {
-            const ctx = canvas.getContext('2d'); const W = canvas.width, H = canvas.height;
-            ctx.fillStyle = '#060a10'; ctx.fillRect(0, 0, W, H);
-            const step = Math.max(1, Math.floor(pcm.length / W));
-            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1;
-            for (let i = 0; i < W; i++) { let sum = 0; for (let j = 0; j < step; j++)sum += Math.abs(pcm[i * step + j] || 0); const amp = (sum / step) * H * 2.5; const y = H / 2 - amp / 2; i === 0 ? ctx.moveTo(i, H / 2) : ctx.lineTo(i, Math.max(1, Math.min(H - 1, y))); }
-            ctx.stroke();
+<script>
+'use strict';
+
+function _detectBackendUrl() {
+    const origin = window.location.origin;
+    if (origin.includes('trycloudflare.com') || origin.includes('localhost:5002')) {
+        return origin; // served via tunnel or windows_agent — use as-is
+    }
+    return 'http://localhost:5002'; // fallback for local dev / Expo WebView
+}
+
+const CONVERT_SERVER = _detectBackendUrl();
+
+window.addEventListener('DOMContentLoaded', () => {
+    const inputEl = document.getElementById('backendUrlInput');
+    if (inputEl) inputEl.value = CONVERT_SERVER;
+    if (typeof loadInputSettings === 'function') loadInputSettings();
+});
+
+function getBackendUrl() {
+    const input = document.getElementById('backendUrlInput');
+    let url = input?.value?.trim() || CONVERT_SERVER;
+    if (url.endsWith('/')) url = url.slice(0, -1);
+    return url;
+}
+
+async function postToBackend(endpoint, formData) {
+    const backendUrl = getBackendUrl();
+    const url = `${backendUrl}/${endpoint}`;
+    try {
+        const resp = await fetch(url, { method: 'POST', body: formData });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => null);
+            let message = `Server error ${resp.status}`;
+            if (text) {
+                try {
+                    const body = JSON.parse(text);
+                    message = body.error || text;
+                } catch {
+                    message = text;
+                }
+            }
+            throw new Error(message);
+        }
+        return resp;
+    } catch (err) {
+        throw new Error(`Backend request failed: ${url} — ${err.message}`);
+    }
+}
+
+// Bytes of raw file data per REPL round trip. Each round trip is one full
+// compile+exec cycle on the board (~15-25 ms), so this constant — not the baud
+// rate — sets the deploy time for a multi-megabyte .kmodel. Both are multiples
+// of 3 so base64 chunks never carry mid-stream padding.
+//
+// Raw-paste mode has a window handshake, so the host cannot outrun the board's
+// input buffer and the chunk can be large. Classic raw REPL has no flow control
+// at all: this board truncates a multi-kilobyte statement mid-string-literal,
+// and the surviving base64 then lexes as an identifier ("RuntimeError: name too
+// long"). So the classic path stays near the size it has proven it can absorb.
+const CHUNK_BYTES         = 4095;
+const CHUNK_BYTES_CLASSIC = 384;
+const SERIAL_SUPPORTED = 'serial' in navigator;
+const SR               = 16000;
+const WINDOW_SAMPLES   = 16000;
+const HOP_SAMPLES      = 8000;
+
+let MODEL_FRAMES = 43;
+let MODEL_BINS   = 232;
+const FFT_WIN    = 1024;
+
+let CLIP_MS     = 1500;
+let THRESH      = 0.80;
+let INFER_MS    = 500;
+
+let recognizer     = null;
+let backbone       = null;
+let embedExtractor = null;
+let EMBED_DIM      = 0;
+
+let headModel      = null;
+let trained        = false;
+let classNamesCopy = [];
+
+let embeddings  = {};
+let classAudio  = {};
+
+let classes = [
+    {id:1, name:'Word1', color:'#4ade80'},
+    {id:2, name:'Word2', color:'#60a5fa'},
+];
+let nextClassId = 3;
+const COLORS = ['#4ade80','#60a5fa','#f87171','#fbbf24','#a78bfa','#22d3ee','#fb923c','#e879f9'];
+
+let micStream    = null;
+let micAudioCtx  = null;
+let micAnalyser  = null;
+// Laptop-mic input Setting mode. Gain/AGC/device only affect the captured
+// waveform level; the per-spectrogram normalization downstream makes detection
+// independent of them (see the note in the Setting panel).
+let inputMode        = 'auto';   // 'auto' | 'setting'
+let inputLevelMode   = 'manual'; // 'manual' (fixed gain) | 'target' (auto-hold to a dBFS)
+let inputGainDb      = 0;        // manual gain, applied via a Web Audio GainNode
+let inputTargetDbfs  = -20;      // target-level mode: each clip auto-scaled to this dBFS
+let inputAgc         = false;    // autoGainControl constraint
+let inputMicDeviceId = '';       // '' = default device
+let micGainNode      = null;
+let micRecordDest    = null;     // MediaStreamAudioDestinationNode feeding MediaRecorder
+let micLevelRaf      = null;
+let activeMicIdx = null;
+let activeMicSource = null; // 'laptop', 'k230', or 'esp32'
+let isRecording  = false;
+let recStartTime = 0;
+let recProgTimer = null;
+
+let micActive    = false;
+let inferStream  = null;
+let inferCtx     = null;
+let inferAnalyser= null;
+let inferBuf     = null;
+let inferBufPos  = 0;
+let inferLastProcessedPos = -1;
+let esp32SmoothedProbs = null;
+let inferTimer   = null;
+let inferProc    = null;
+let visFrame     = null;
+let inferSource  = null; // 'laptop', 'k230', or 'esp32'
+let inferRunning = false;
+let k230InferActive=false, k230InferPromise=null;
+let k230InferWaveform=new Float32Array(1024);
+let esp32InferActive=false, esp32InferPromise=null;
+let esp32InferWaveform=new Float32Array(1024);
+
+const ENC=new TextEncoder(), DEC=new TextDecoder();
+let port=null, portReader=null, portWriter=null, connected=false;
+// Deploy-path RX buffer, held as raw byte chunks rather than decoded text:
+// the raw REPL protocol carries single-byte control codes that a UTF-8 decode
+// would corrupt. rxWaiters lets readers wake on arrival instead of polling.
+let rxQ=[], rxQLen=0, rxWaiters=[];
+// null = not yet probed, true = board offers raw-paste flow control, false = not.
+let rawPaste=null;
+
+// Dedicated serial state for K230 microphone capture. This is intentionally
+// separate from the existing K230 deployment connection.
+let k230MicPort=null, k230MicReader=null, k230MicWriter=null;
+let k230MicConnected=false, k230MicRxBuf='';
+let lastK230VoicePort=null;
+let k230AudioReady=false;
+let k230MonitorActive=false, k230MonitorPromise=null;
+let k230Waveform=new Float32Array(1024);
+let k230CommandTail=Promise.resolve();
+
+// Dedicated DFR1154/ESP32-S3 microphone WebSerial connection. The firmware
+// exposes AUDIO_CAPTURE and AUDIO_STOP; this state is separate from deployment.
+let esp32MicPort=null, esp32MicReader=null, esp32MicWriter=null;
+let esp32MicConnected=false, esp32MicRxBuf='', esp32MicLines=[];
+let lastEsp32VoicePort=null;
+let esp32MicRxPromise=null, esp32MicClosePromise=Promise.resolve();
+let esp32MicCommandTail=Promise.resolve();
+let esp32MonitorActive=false, esp32MonitorPromise=null;
+let esp32Waveform=new Float32Array(1024);
+
+// ── WebSerial utilities ──────────────────────────────────────────────────
+function usbLog(m,c=''){const el=document.getElementById('usbLog');if(!el)return;const l=document.createElement('div');if(c)l.className=c;l.textContent=m;el.appendChild(l);el.scrollTop=el.scrollHeight;}
+function usbLogClear(){const el=document.getElementById('usbLog');if(el)el.innerHTML='';}
+function usbSetPct(i,p){const pv=Math.round(p*100);const pEl=document.getElementById('usbFile'+i+'Pct');const fEl=document.getElementById('usb'+i+'Fill');if(pEl)pEl.textContent=pv+'%';if(fEl)fEl.style.width=pv+'%';}
+function showUsbPanel(v){document.getElementById('usbProgressPanel')?.classList.toggle('visible',v);}
+function resetUsbPanel(){usbSetPct(1,0);usbSetPct(2,0);usbLogClear();showUsbPanel(false);}
+async function cleanupPort(){connected=false;try{portReader&&await portReader.cancel();}catch{}try{portReader&&portReader.releaseLock();}catch{}try{portWriter&&await portWriter.close();}catch{}try{portWriter&&portWriter.releaseLock();}catch{}try{port&&await port.close();}catch{}port=portReader=portWriter=null;rxReset();rawPaste=null;}
+function rxReset(){rxQ=[];rxQLen=0;}
+function rxPush(u8){rxQ.push(u8);rxQLen+=u8.length;const w=rxWaiters;rxWaiters=[];for(const f of w)f();}
+// Resolves as soon as bytes arrive, or after ms. Replaces fixed-interval
+// polling, which imposed its own latency floor on every round trip.
+function rxWait(ms){return new Promise(r=>{let done=false;const f=()=>{if(done)return;done=true;r();};rxWaiters.push(f);setTimeout(f,Math.max(1,ms));});}
+async function rxTake(n,ms){const dl=Date.now()+ms;while(rxQLen<n){if(Date.now()>=dl)throw new Error('Serial timeout (wanted '+n+' byte(s), have '+rxQLen+')');await rxWait(Math.min(50,dl-Date.now()));}
+    const out=new Uint8Array(n);let got=0;
+    while(got<n){const head=rxQ[0],take=Math.min(head.length,n-got);out.set(head.subarray(0,take),got);got+=take;if(take===head.length)rxQ.shift();else rxQ[0]=head.subarray(take);}
+    rxQLen-=n;return out;}
+async function rxTakeUntil(term,ms){const dl=Date.now()+ms;const acc=[];for(;;){const b=await rxTake(1,Math.max(1,dl-Date.now()));if(b[0]===term)return new Uint8Array(acc);acc.push(b[0]);}}
+async function rxPump(){rxReset();try{while(connected){const{value,done}=await portReader.read();if(done)break;if(value?.length)rxPush(value);}}catch(e){if(connected)usbLog('RX: '+e.message,'err');}}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function write(d){if(!portWriter)return;await portWriter.write(typeof d==='string'?ENC.encode(d):d);}
+function bytesToStr(u8){let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return s;}
+function u8ToB64(u8){return btoa(bytesToStr(u8));}
+const HEXB=Array.from({length:256},(_,i)=>i.toString(16).padStart(2,'0'));
+function u8ToHex(u8){let s='';for(let i=0;i<u8.length;i++)s+=HEXB[u8[i]];return s;}
+// Drains whatever is buffered, returning it for diagnostics.
+async function rxDrain(ms=250){
+    await rxWait(ms);
+    return rxQLen?bytesToStr(await rxTake(rxQLen,300)):'';
+}
+// Ctrl-C out of any running script, Ctrl-A into raw REPL, discard the banner.
+// Leaves the board at the point where a command can be written.
+async function resyncRepl(){
+    await write('\x03');await sleep(250);await write('\x03');await sleep(250);
+    rxReset();
+    await write('\x01');await sleep(400);
+    const saw=await rxDrain();rxReset();
+    return saw;
+}
+// Leaves the board in raw REPL with the '>' prompt consumed; execPy re-consumes
+// the prompt it emits after each command, so that state holds between calls.
+async function enterRawREPL(){
+    usbLog('Entering REPL...','info');
+    let saw='';
+    for(let attempt=1;attempt<=3;attempt++){
+        saw=await resyncRepl();
+        // The banner text is not a reliable signal: CanMV builds word it
+        // differently and a running script interleaves its own output with it.
+        // Probe with a real command and let the response decide. Probe over
+        // classic exec, which needs no capability negotiation.
+        rawPaste=false;
+        try{await execPy('pass',6000);}
+        catch(e){usbLog('Attempt '+attempt+': '+e.message,'warn');continue;}
+        usbLog('REPL ready','ok');
+        // Now that the REPL is known good, find out whether this firmware offers
+        // flow control. Without it, large writes corrupt on this board.
+        rawPaste=null;
+        try{await execPy('pass',6000);}
+        catch(e){
+            usbLog('raw-paste probe failed ('+e.message+'); classic REPL','warn');
+            rawPaste=false;await resyncRepl();
+            try{await execPy('pass',6000);}catch{}
+        }
+        return;
+    }
+    const hint=saw.replace(/[\r\n]+/g,' ').trim().slice(0,120);
+    throw new Error('K230 raw REPL did not respond'+(hint?' (board sent: "'+hint+'")':' (board sent nothing)')+'. Reset the board, close any other serial monitor holding the port, then deploy again.');
+}
+async function exitRawREPL(){await write('\x02');await sleep(200);}
+// Raw REPL acknowledges a command with OK. Skip anything preceding it rather
+// than desyncing, since a board fresh out of a running script can still have
+// script output or a stray prompt in flight.
+async function rxSkipToOK(ms){
+    const dl=Date.now()+ms;const skipped=[];
+    for(;;){
+        const b=await rxTake(1,Math.max(1,dl-Date.now()));
+        if(b[0]===0x4f){
+            const n=await rxTake(1,Math.max(1,dl-Date.now()));
+            if(n[0]===0x4b)break;
+            skipped.push(b[0],n[0]);
+        }else skipped.push(b[0]);
+        if(skipped.length>4096)throw new Error('no OK from board (not in raw REPL?)');
+    }
+    const junk=bytesToStr(new Uint8Array(skipped)).replace(/[\r\n]+/g,' ').trim();
+    if(junk)usbLog('skipped: '+junk.slice(0,80),'warn');
+}
+// MicroPython raw-paste mode. The board advertises a window size and emits 0x01
+// as it drains each window, so the host physically cannot outrun its input
+// buffer — the guarantee classic raw REPL does not give. Returns false if this
+// firmware does not offer it, leaving the board ready for a classic write.
+async function pasteWrite(code,ms){
+    await write('\x05A\x01');
+    const h=await rxTake(2,4000);
+    if(h[0]!==0x52){try{await rxTakeUntil(0x3e,2000);}catch{}return false;}
+    if(h[1]!==0x01)return false;              // 'R\x00' = understood, not supported
+    const wb=await rxTake(2,4000),win=wb[0]|(wb[1]<<8);
+    if(win<32)return false;
+    const buf=ENC.encode(code);let remain=win,i=0;
+    while(i<buf.length){
+        while(remain===0||rxQLen){
+            const c=await rxTake(1,ms);
+            if(c[0]===0x01)remain+=win;
+            else if(c[0]===0x04){await write('\x04');throw new Error('board aborted the paste');}
+            else throw new Error('unexpected 0x'+c[0].toString(16)+' during raw paste');
+        }
+        const n=Math.min(remain,buf.length-i);
+        await write(buf.subarray(i,i+n));
+        remain-=n;i+=n;
+    }
+    await write('\x04');
+    await rxTakeUntil(0x04,ms);               // board acknowledges end of data
+    return true;
+}
+async function execPy(code,ms=25000){
+    let pasted=false;
+    if(rawPaste!==false){
+        pasted=await pasteWrite(code,ms);
+        if(rawPaste===null){rawPaste=pasted;usbLog(pasted?'raw-paste mode: flow controlled, window OK':'classic raw REPL: no flow control','info');}
+    }
+    if(!pasted){await write(code);await write('\x04');await rxSkipToOK(ms);}
+    const out=await rxTakeUntil(0x04,ms),err=await rxTakeUntil(0x04,ms);
+    await rxTakeUntil(0x3e,ms);
+    const es=bytesToStr(err).trim();
+    if(es){usbLog('stderr: '+es,'warn');throw new Error(es.split('\n').pop().trim()||'Board raised an exception');}
+    return bytesToStr(out).trim();
+}
+async function ensureDir(p){await execPy(`import os\r\ntry:\r\n os.mkdir('${p.replace(/\/$/,"")}')\r\nexcept:pass`);}
+async function boardFileSize(dest){
+    const n=parseInt(await execPy(`import os\r\ntry:\r\n print(os.stat('${dest}')[6])\r\nexcept:\r\n print(-1)`),10);
+    return Number.isFinite(n)?n:-1;
+}
+// base64 costs 1.33x on the wire against 2.0x for hex, and a2b_base64 decodes on
+// the board far faster than bytes.fromhex parses. bytes.fromhex is the fallback
+// because it is a builtin, so it works even if neither binascii module is present.
+async function pickEncoder(){
+    try{
+        await execPy('try:\r\n import ubinascii as _ub\r\nexcept:\r\n import binascii as _ub');
+        return u8=>`_f.write(_ub.a2b_base64('${u8ToB64(u8)}'))`;
+    }catch{
+        usbLog('No binascii on board; falling back to hex','warn');
+        return u8=>`_f.write(bytes.fromhex('${u8ToHex(u8)}'))`;
+    }
+}
+async function closeBoardFile(){try{await execPy('try:\r\n _f.close()\r\nexcept:\r\n pass');}catch{}}
+async function writeFileOnBoard(dest,arr,onPct){
+    let enc=await pickEncoder();
+    const t0=Date.now();
+    let chunk=rawPaste?CHUNK_BYTES:CHUNK_BYTES_CLASSIC,off=0,lastUi=0,mode='wb',tries=0;
+    for(;;){
+        try{
+            await execPy(`_f=open('${dest}','${mode}')`);
+            while(off<arr.length){
+                await execPy(enc(arr.subarray(off,off+chunk)));
+                off=Math.min(off+chunk,arr.length);
+                const now=Date.now();
+                if(onPct&&(now-lastUi>120||off>=arr.length)){lastUi=now;onPct(off/arr.length);}
+            }
+            await execPy('_f.close();del _f');
+            break;
+        }catch(e){
+            // A silent board is wedged, not merely overloaded. Shrinking the chunk
+            // and writing again only pushes it further under, so stop and say so.
+            if(/Serial timeout|no OK from board/i.test(e.message))
+                throw new Error(e.message+' — board stopped responding. Unplug/replug or reset the K230, then deploy again.');
+            if(++tries>4||chunk<=192)throw e;
+            chunk=Math.max(192,Math.floor(chunk/6)*3);
+            usbLog('Chunk failed ('+e.message+'); retrying at '+chunk+' B','warn');
+            await enterRawREPL();
+            // The previous _f is still open on the board. Reopening without
+            // closing it leaves a dangling handle on the SD card, which is what
+            // turned the retry into "OSError: [Errno 1] EPERM".
+            await closeBoardFile();
+            enc=await pickEncoder();
+            const have=await boardFileSize(dest);
+            off=have<0?0:Math.min(have,arr.length);
+            mode=off>0?'ab':'wb';
+        }
+    }
+    // A short write otherwise stays invisible until kpu.load_kmodel fails on the
+    // board, which is a confusing place to debug from.
+    const sz=await boardFileSize(dest);
+    if(sz!==arr.length)throw new Error(`${dest} is ${sz} bytes on the board, expected ${arr.length}`);
+    const secs=Math.max(0.001,(Date.now()-t0)/1000);
+    usbLog(`${(arr.length/1024).toFixed(0)} KB in ${secs.toFixed(1)}s (${(arr.length/1024/secs).toFixed(1)} KB/s)`,'info');
+}
+function onDeployMethodChange(val){document.getElementById('wifiRow').style.display=val==='wifi'?'flex':'none';document.getElementById('usbBaudRow').style.display=val==='usb'?'flex':'none';if(val!=='usb')showUsbPanel(false);}
+function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+function setStatus(msg){document.getElementById('statusBar').textContent=msg;}
+function updateThresh(v){THRESH=parseInt(v)/100;const el=document.getElementById('thresholdValue');if(el)el.textContent=v+'%';}
+function updateInferInterval(v){INFER_MS=parseInt(v);const e1=document.getElementById('threshDisplay2');if(e1)e1.textContent=v+'ms';const e2=document.getElementById('inferDisplay');if(e2)e2.textContent=v+'ms';if(micActive)restartInferTimer();}
+function isNoise(name){const n=name.toLowerCase();return n.includes('noise')||n.includes('background')||n.includes('silence');}
+function updateButtons(){const ok=trained;['deployHeaderBtn','deployCardBtn','deployK230Btn','exportBtn','exportEsp32Btn','deployEsp32Btn','micBtn','k230InferBtn','esp32InferBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=!ok;});}
+
+// ── Clip length ───────────────────────────────────────────────────────────
+function setClipLen(ms){
+    CLIP_MS=ms;
+    document.querySelectorAll('.cl-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.ms)===ms));
+    const nW=computeNWindows(ms);
+    const h=document.getElementById('clipLenHint');
+    if(h)h.innerHTML=`Each clip is recorded for <b>${ms/1000}s</b>, sliced into <b>${nW}</b> overlapping 1-sec windows, each embedded -> averaged -> 1 clip vector.`;
+    const a=document.getElementById('nWindows');    if(a)a.textContent=nW;
+    const b=document.getElementById('pbClipLen');   if(b)b.textContent=ms/1000;
+    const c2=document.getElementById('pbWindows');  if(c2)c2.textContent=nW;
+}
+function computeNWindows(ms){const samples=Math.ceil(SR*(ms/1000));let n=0,start=0;while(start+WINDOW_SAMPLES<=samples){n++;start+=HOP_SAMPLES;}return Math.max(1,n);}
+
+// ── Build embedding extractor from backbone layer references ─────────────
+function buildEmbedExtractor(){
+    const layers=backbone.layers;
+    let embedLayer=null, embedDim=0;
+    for(let i=layers.length-2;i>=0;i--){
+        const layer=layers[i];
+        const shape=layer.outputShape;
+        const flat=Array.isArray(shape[0])?shape[0]:shape;
+        if(flat.length===2&&typeof flat[1]==='number'&&flat[1]>=32){embedLayer=layer;embedDim=flat[1];break;}
+    }
+    if(!embedLayer){embedLayer=layers[layers.length-2];const shape=embedLayer.outputShape;const flat=Array.isArray(shape[0])?shape[0]:shape;embedDim=flat[flat.length-1]||128;}
+    console.log('[EmbedExtractor] using layer "'+embedLayer.name+'" dim '+embedDim);
+    embedExtractor=tf.model({inputs:backbone.inputs,outputs:embedLayer.output});
+    EMBED_DIM=embedDim;
+    try{const inShape=backbone.inputs[0].shape;if(Array.isArray(inShape)&&inShape.length===4){if(inShape[1])MODEL_FRAMES=inShape[1];if(inShape[2])MODEL_BINS=inShape[2];}console.log('[BackboneShape]',JSON.stringify(inShape));}catch(e){console.warn('[BackboneShape]',e);}
+    const nameEl=document.getElementById('embedLayerName');const dimEl=document.getElementById('embedLayerDim');
+    const infoBox=document.getElementById('embedInfoBox');const pbDim=document.getElementById('pbEmbedDim');
+    if(nameEl)nameEl.textContent=embedLayer.name;if(dimEl)dimEl.textContent=embedDim;
+    if(infoBox)infoBox.style.display='block';if(pbDim)pbDim.textContent=embedDim;
+    return embedDim;
+}
+
+// ── Load backbone ────────────────────────────────────────────────────────
+async function loadBackbone(){
+    const fill=document.getElementById('modelLoadFill');
+    const icon=document.getElementById('modelLoadIcon');
+    const title=document.getElementById('modelLoadTitle');
+    const sub=document.getElementById('modelLoadStatus');
+    try{
+        let p=0;
+        const ticker=setInterval(()=>{p=Math.min(90,p+Math.random()*10);if(fill)fill.style.width=p+'%';},300);
+        recognizer=speechCommands.create('BROWSER_FFT');
+        await recognizer.ensureModelLoaded();
+        backbone=recognizer.model;
+        clearInterval(ticker);
+        buildEmbedExtractor();
+        if(fill){fill.style.width='100%';fill.style.background='#10b981';}
+        if(icon)icon.textContent='✅';
+        if(title)title.textContent='Backbone ready — Speech Commands v2 (embed dim: '+EMBED_DIM+')';
+        if(sub)sub.textContent=EMBED_DIM+'-dim embeddings. Manual pipeline active.';
+        document.getElementById('modelLoadBar').style.borderLeftColor='#10b981';
+        ['addClassBtn','addNoiseBtn','trainBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=false;});
+        setStatus('Backbone loaded (embed dim: '+EMBED_DIM+') — add clips for each class, then train.');
+        render();
+    }catch(e){
+        if(fill){fill.style.width='100%';fill.style.background='#ef4444';}
+        if(icon)icon.textContent='❌';
+        if(title)title.textContent='Failed to load backbone';
+        if(sub)sub.textContent=e.message;
+        setStatus('Backbone load failed: '+e.message);
+        console.error(e);
+    }
+}
+
+// ── Pure-JS radix-2 Cooley-Tukey FFT ────────────────────────────────────
+function realFFTMagnitudes(signal){
+    const n=signal.length;
+    const re=new Float32Array(signal);
+    const im=new Float32Array(n);
+    const bits=Math.log2(n)|0;
+    for(let i=1,j=0;i<n;i++){let bit=n>>1,x=i;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;}}
+    for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wR=Math.cos(ang),wI=Math.sin(ang),half=len>>1;for(let i=0;i<n;i+=len){let cR=1,cI=0;for(let j=0;j<half;j++){const uR=re[i+j],uI=im[i+j],vR=re[i+j+half]*cR-im[i+j+half]*cI,vI=re[i+j+half]*cI+im[i+j+half]*cR;re[i+j]=uR+vR;im[i+j]=uI+vI;re[i+j+half]=uR-vR;im[i+j+half]=uI-vI;const nr=cR*wR-cI*wI;cI=cR*wI+cI*wR;cR=nr;}}}
+    const mag=new Float32Array(n>>1);
+    for(let i=0;i<(n>>1);i++)mag[i]=Math.sqrt(re[i]*re[i]+im[i]*im[i]);
+    return mag;
+}
+
+// ── Spectrogram preprocessing ────────────────────────────────────────────
+function computeSpectrogram(pcm16k){
+    const n=pcm16k.length,win=FFT_WIN;
+    const hop=MODEL_FRAMES>1?Math.max(1,Math.floor((n-win)/(MODEL_FRAMES-1))):n;
+    const hann=new Float32Array(win);
+    for(let i=0;i<win;i++)hann[i]=0.5*(1-Math.cos(2*Math.PI*i/(win-1)));
+    const specData=new Float32Array(MODEL_FRAMES*MODEL_BINS);
+    for(let f=0;f<MODEL_FRAMES;f++){
+        const s=f*hop;
+        const frame=new Float32Array(win);
+        for(let i=0;i<win;i++)frame[i]=((s+i)<n?pcm16k[s+i]:0)*hann[i];
+        const mag=realFFTMagnitudes(frame);
+        for(let b=0;b<MODEL_BINS;b++)specData[f*MODEL_BINS+b]=Math.log(Math.max(mag[b],1e-6));
+    }
+    return tf.tensor4d(specData,[1,MODEL_FRAMES,MODEL_BINS,1]);
+}
+function computeNormalizedSpectrogram(pcm16k){
+    const spec = computeSpectrogram(pcm16k);
+    const data = spec.dataSync();
+    spec.dispose();
+    const len = data.length;
+    let sum = 0, sumsq = 0;
+    for (let i = 0; i < len; i++) {
+        sum += data[i];
+        sumsq += data[i] * data[i];
+    }
+    const mean = sum / len;
+    const variance = Math.max(0, (sumsq / len) - mean * mean);
+    const stdDev = Math.sqrt(variance) + 1e-4;
+    const normalized = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+        normalized[i] = (data[i] - mean) / stdDev;
+    }
+    return tf.tensor4d(normalized, [1, MODEL_FRAMES, MODEL_BINS, 1]);
+}
+// Per-spectrogram mean/std normalization cancels the constant log-offset a
+// microphone gain difference produces, so clips recorded on the laptop mic
+// transfer to the K230/ESP32-S3 mics. The K230 script and ESP32 firmware
+// (tm_speech_commands_norm_log mode) apply the identical normalization.
+function prepareWindowInput(pcm16k){return computeNormalizedSpectrogram(pcm16k);}
+
+// ── Embed one window ─────────────────────────────────────────────────────
+async function embedWindow(pcm16k){
+    if(!embedExtractor)throw new Error('Embedding extractor not built yet');
+    const input=prepareWindowInput(pcm16k);
+    const embedding=embedExtractor.predict(input);
+    input.dispose();
+    const flat=embedding.reshape([-1]);
+    embedding.dispose();
+    const arr=await flat.data();
+    flat.dispose();
+    return new Float32Array(arr);
+}
+
+// ── Embed full clip (slice into windows, embed each, average, L2-normalise) ──
+async function embedClip(pcmFull){
+    const totalSamples=pcmFull.length;
+    const windows=[];
+    let start=0;
+    while(start+WINDOW_SAMPLES<=totalSamples){windows.push(pcmFull.slice(start,start+WINDOW_SAMPLES));start+=HOP_SAMPLES;}
+    if(windows.length===0){const padded=new Float32Array(WINDOW_SAMPLES);padded.set(pcmFull.slice(0,WINDOW_SAMPLES));windows.push(padded);}
+    const embeds=[];
+    for(const win of windows){const e=await embedWindow(win);embeds.push(e);}
+    const dim=embeds[0].length;
+    const avg=new Float32Array(dim);
+    for(const e of embeds)for(let i=0;i<dim;i++)avg[i]+=e[i];
+    for(let i=0;i<dim;i++)avg[i]/=embeds.length;
+    let norm=0;for(let i=0;i<dim;i++)norm+=avg[i]*avg[i];
+    norm=Math.sqrt(norm)+1e-8;
+    for(let i=0;i<dim;i++)avg[i]/=norm;
+    return avg;
+}
+
+// ── Decode + resample ────────────────────────────────────────────────────
+async function decodeAndResample(blob){
+    const ab=await blob.arrayBuffer();
+    const decCtx=new AudioContext();
+    const decoded=await decCtx.decodeAudioData(ab);
+    await decCtx.close();
+    const targetLen=Math.ceil(decoded.duration*SR);
+    const offCtx=new OfflineAudioContext(1,targetLen,SR);
+    const src=offCtx.createBufferSource();
+    src.buffer=decoded;src.connect(offCtx.destination);src.start(0);
+    const rendered=await offCtx.startRendering();
+    return rendered.getChannelData(0).slice();
+}
+
+// ── PCM -> WAV ────────────────────────────────────────────────────────────
+function pcmToWav(pcm,sr=16000){
+    const n=pcm.length,ds=n*2,buf=new ArrayBuffer(44+ds),v=new DataView(buf);
+    const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+    ws(0,'RIFF');v.setUint32(4,36+ds,true);ws(8,'WAVE');ws(12,'fmt ');
+    v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+    v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);
+    v.setUint16(32,2,true);v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,ds,true);
+    let o=44;for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,pcm[i]));v.setInt16(o,s<0?s*0x8000:s*0x7FFF,true);o+=2;}
+    return new Blob([buf],{type:'audio/wav'});
+}
+
+// ── K230 microphone capture over USB raw REPL ───────────────────────────
+async function k230MicRxPump(){
+    k230MicRxBuf='';
+    try{
+        while(k230MicConnected){
+            const {value,done}=await k230MicReader.read();
+            if(done)break;
+            if(value?.length)k230MicRxBuf+=DEC.decode(value,{stream:true});
+        }
+    }catch(e){
+        if(k230MicConnected)setStatus('K230 serial receive error: '+e.message);
+    }
+}
+
+async function k230MicWrite(data){
+    if(!k230MicWriter)throw new Error('K230 serial port is not connected');
+    await k230MicWriter.write(typeof data==='string'?ENC.encode(data):data);
+}
+
+async function cleanupK230MicPort(){
+    await stopK230Monitor();
+    await cleanupK230AudioSession(true);
+    await closeK230MicTransport();
+}
+
+async function closeK230MicTransport(){
+    if(k230MicPort)lastK230VoicePort=k230MicPort;
+    k230MicConnected=false;
+    try{k230MicWriter&&await k230MicWriter.write(ENC.encode('\x02'));}catch{}
+    try{k230MicReader&&await k230MicReader.cancel();}catch{}
+    try{k230MicReader&&k230MicReader.releaseLock();}catch{}
+    try{k230MicWriter&&await k230MicWriter.close();}catch{}
+    try{k230MicWriter&&k230MicWriter.releaseLock();}catch{}
+    try{k230MicPort&&await k230MicPort.close();}catch{}
+    k230MicPort=k230MicReader=k230MicWriter=null;
+    k230MicRxBuf='';
+    k230CommandTail=Promise.resolve();
+}
+
+async function ensureK230MicConnected(){
+    if(k230MicConnected&&k230MicPort?.readable&&k230MicPort?.writable)return;
+    if(!SERIAL_SUPPORTED)throw new Error('K230 Mic requires Chrome/Edge with WebSerial');
+    if(k230MicPort)await cleanupK230MicPort();
+    // Full-rate PCM over raw REPL is not reliable at 115200 baud.
+    const baud=921600;
+    const baudSelect=document.getElementById('usbBaudSelect');
+    if(baudSelect)baudSelect.value=String(baud);
+    k230MicPort=await navigator.serial.requestPort();
+    await k230MicPort.open({baudRate:baud,bufferSize:32768});
+    lastK230VoicePort=k230MicPort;
+    k230MicReader=k230MicPort.readable.getReader();
+    k230MicWriter=k230MicPort.writable.getWriter();
+    k230MicConnected=true;
+    k230MicRxPump();
+}
+
+async function k230MicEnterRawREPL(){
+    await k230CommandTail.catch(()=>{});
+    // Give a running classifier time to execute its finally block and release
+    // PyAudio/MediaManager before opening a new microphone stream.
+    await k230MicWrite('\x03');await sleep(1000);
+    for(let attempt=0;attempt<2;attempt++){
+        k230MicRxBuf='';
+        await k230MicWrite('\x01');await sleep(300);
+        let full='',deadline=Date.now()+2500;
+        while(Date.now()<deadline){
+            if(k230MicRxBuf){full+=k230MicRxBuf;k230MicRxBuf='';}
+            if(full.includes('raw REPL')){k230MicRxBuf='';return;}
+            await sleep(40);
+        }
+        await k230MicWrite('\x03');await sleep(400);
+    }
+    throw new Error('K230 raw REPL was not detected. Stop CanMV IDE/serial monitor and reset the board');
+}
+
+async function k230MicExecPyUnlocked(code,timeoutMs=15000){
+    k230MicRxBuf='';
+    await k230MicWrite(code);
+    await k230MicWrite('\x04');
+    let full='';
+    const deadline=Date.now()+timeoutMs;
+    while(Date.now()<deadline){
+        if(k230MicRxBuf){
+            full+=k230MicRxBuf;k230MicRxBuf='';
+            const okAt=full.indexOf('OK');
+            if(okAt>=0){
+                const afterOk=full.slice(okAt+2);
+                const outEnd=afterOk.indexOf('\x04');
+                if(outEnd>=0){
+                    const errEnd=afterOk.indexOf('\x04',outEnd+1);
+                    if(errEnd>=0){
+                        const output=afterOk.slice(0,outEnd).trim();
+                        const stderr=afterOk.slice(outEnd+1,errEnd).trim();
+                        if(stderr)throw new Error(stderr);
+                        return output;
+                    }
+                }
+            }
+            if(full.includes('\r\n>')||full==='>'){
+                await k230MicWrite('\x03');await sleep(100);k230MicRxBuf='';
+                throw new Error('K230 REPL is waiting for more Python input');
+            }
         }
 
         /**

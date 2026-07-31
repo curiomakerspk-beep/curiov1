@@ -1013,16 +1013,10 @@ async function start() {
     if (typeof openS3TrainScreen === 'function') openS3TrainScreen();
   });
 
-  // Restore any previously-picked boards (if any) so their categories
-  // survive reloads. Falls back to the old singular key for migration.
-  try {
-    var _savedBoards = JSON.parse(localStorage.getItem('blockly_selected_boards') || 'null');
-    if (!_savedBoards) {
-      var _legacyBoard = localStorage.getItem('blockly_selected_board');
-      _savedBoards = _legacyBoard ? [_legacyBoard] : [];
-    }
-    _savedBoards.forEach(function (b) { setSelectedBoard(b); });
-  } catch (e) { }
+  // NOTE: board restore (localStorage + ?board= URL param) lives in
+  // cross-page-integration-1.js, right after setSelectedBoard is defined —
+  // that script loads AFTER this one, so calling setSelectedBoard from here
+  // would throw ReferenceError (silently swallowed by a try/catch).
 
   // ══════════════════════════════════════════════════════════════════════
   // BLOCKLY v12 DYNAMIC TOOLBOX FEATURES

@@ -9959,7 +9959,7 @@ function openBoardScreen() {
     window.postMessage(payload, '*');
   } else {
     // Standalone browser — go directly to the board picker
-    window.location.href = 'board.html';
+    window.location.href = 'board.html?v=' + Date.now();
   }
 }
 
