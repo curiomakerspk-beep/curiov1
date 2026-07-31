@@ -1433,6 +1433,7 @@
         // ──────────────────────────────────────────────────────────────
         // CONFIG
         // ──────────────────────────────────────────────────────────────
+        // Works out which server URL to use for conversion, based on the current site
         const CONVERT_SERVER = (() => {
             const origin = window.location.origin;
             const isCloudflare = origin && origin.includes('trycloudflare.com');
@@ -1469,6 +1470,7 @@
 
         // Colors beyond CLASS_COLORS are generated via golden-angle hue rotation
         // so class 10+ never collides with an earlier class's color.
+        // Turns a hue value into a hex color, used to auto-color extra classes
         function hueToHex(h, s = 70, l = 50) {
             s /= 100; l /= 100;
             const k = n => (n + h / 30) % 12;
@@ -1477,6 +1479,7 @@
             const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
             return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
         }
+        // Picks a display color for a class, using presets first then generated hues
         function colorForId(id) {
             if (id <= CLASS_COLORS.length) return CLASS_COLORS[id - 1];
             return hueToHex((id * 137.508) % 360);
@@ -1541,20 +1544,26 @@
         let connected = false, rxBuf = '';
         const rxHooks = [];
 
+        // Adds a line of text to the USB log panel, so the user can see progress
         function usbLog(msg, cls = '') {
             const el = document.getElementById('usbLog'); if (!el) return;
             const line = document.createElement('div'); if (cls) line.className = cls;
             line.textContent = msg; el.appendChild(line); el.scrollTop = el.scrollHeight;
         }
+        // Clears all text from the USB log panel
         function usbLogClear() { const el = document.getElementById('usbLog'); if (el) el.innerHTML = ''; }
+        // Updates the percent text and fill bar for a USB file transfer
         function usbSetProgress(idx, pct) {
             const p = Math.round(pct * 100);
             const pEl = document.getElementById(`usbFile${idx}Pct`);
             const fEl = document.getElementById(`usbFile${idx}Fill`);
             if (pEl) pEl.textContent = p + '%'; if (fEl) fEl.style.width = p + '%';
         }
+        // Shows or hides the USB deploy progress panel
         function showUsbPanel(v) { document.getElementById('usbProgressPanel')?.classList.toggle('visible', v); }
+        // Resets the USB progress panel back to its starting state
         function resetUsbPanel() { usbSetProgress(1, 0); usbSetProgress(2, 0); usbLogClear(); showUsbPanel(false); }
+        // Closes and releases the serial port connection, used when disconnecting the board
         async function cleanupPort() {
             connected = false;
             try { portReader && await portReader.cancel(); } catch { }
@@ -1564,6 +1573,7 @@
             try { port && await port.close(); } catch { }
             port = portReader = portWriter = null;
         }
+        // Continuously reads incoming serial data from the board while connected
         async function rxPump() {
             rxBuf = '';
             try {
@@ -1573,8 +1583,11 @@
                 }
             } catch (e) { if (connected) usbLog('RX error: ' + e.message, 'err'); }
         }
+        // Pauses execution for the given number of milliseconds
         function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+        // Sends raw text or bytes to the connected board over serial
         async function write(d) { if (!portWriter) return; await portWriter.write(typeof d === 'string' ? ENC.encode(d) : d); }
+        // Puts the board into MicroPython's raw REPL mode so we can run code on it
         async function enterRawREPL() {
             usbLog('Entering Raw REPL...', 'info');
             await write('\x03'); await sleep(200); await write('\x03'); await sleep(200); rxBuf = '';
@@ -1586,7 +1599,9 @@
             else usbLog('Raw REPL banner not seen — reset board', 'warn');
             rxBuf = '';
         }
+        // Exits raw REPL mode on the board, back to normal mode
         async function exitRawREPL() { await write('\x02'); await sleep(200); }
+        // Runs a piece of Python code on the board and returns its output
         async function execPy(code) {
             rxBuf = ''; await write(code); await write('\x04');
             let full = ''; const dl = Date.now() + 10000;
@@ -1605,7 +1620,9 @@
                 } await sleep(10);
             } throw new Error('Timeout. Last: ' + full.slice(-40).replace(/\x04/g, '<EOT>'));
         }
+        // Creates a folder on the board if it doesn't already exist
         async function ensureDir(path) { const p = path.replace(/\/$/, ''); await execPy(`import os\r\ntry:\r\n os.mkdir('${p}')\r\nexcept:pass`); }
+        // Uploads a file's bytes to the board in small chunks, reporting progress
         async function writeFileOnBoard(dest, arr, onPct) {
             await execPy(`_f=open('${dest}','wb')`);
             let off = 0;
@@ -1618,6 +1635,7 @@
             await execPy(`_f.close();del _f`);
         }
 
+        // Runs when the user switches between USB and WiFi deploy methods, updating the form
         function onDeployMethodChange(val) {
             document.getElementById('wifiRow').style.display = val === 'wifi' ? 'flex' : 'none';
             document.getElementById('usbBaudRow').style.display = val === 'usb' ? 'flex' : 'none';
@@ -1628,13 +1646,17 @@
         // ──────────────────────────────────────────────────────────────
         // HELPERS
         // ──────────────────────────────────────────────────────────────
+        // Shows a message in the status bar at the bottom of the page
         function setStatus(msg) { document.getElementById('statusBar').textContent = msg; }
+        // Updates the detection confidence threshold when the user moves the slider
         function updateThreshold(val) { THRESHOLD = parseInt(val) / 100; document.getElementById('thresholdValue').textContent = val + '%'; }
+        // Triggers a browser download of the given blob, used for saving exported files
         function downloadBlob(blob, name) {
             const url = URL.createObjectURL(blob); const a = document.createElement('a');
             a.href = url; a.download = name; document.body.appendChild(a); a.click();
             document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
+        // Enables or disables action buttons depending on whether a model has been trained
         function updateButtons() {
             ['deployHeaderBtn', 'deployCardBtn', 'deployK230Btn', 'exportBtn', 'testBtn'].forEach(id => {
                 const el = document.getElementById(id); if (el) el.disabled = !trained;
@@ -1661,6 +1683,7 @@
         // the training distribution and one class wins constantly.
         const KP_MIN_SCORE = 0.3;
 
+        // Converts MoveNet keypoints into a normalized feature array for training/classifying
         function keypointsToFeatures(keypoints, imgW, imgH) {
             const arr = new Float32Array(NUM_KEYPOINTS * 2);
 
@@ -1692,6 +1715,7 @@
             [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16]
         ];
 
+        // Draws a small skeleton thumbnail for a saved sample in the class card
         function drawPoseThumb(canvas, keypoints, color) {
             const ctx = canvas.getContext('2d');
             const W = canvas.width, H = canvas.height;
@@ -1722,6 +1746,7 @@
             });
         }
 
+        // Draws the pose skeleton lines and joints on top of the live camera canvas
         function drawSkeletonOnCanvas(ctx, keypoints, W, H, scaleX, scaleY, color) {
             const tx = kp => kp.x * scaleX;
             const ty = kp => kp.y * scaleY;
@@ -1746,6 +1771,7 @@
         // ──────────────────────────────────────────────────────────────
         // LOAD MOVENET  (runs once on page load)
         // ──────────────────────────────────────────────────────────────
+        // Loads the MoveNet pose detection model when the page first opens
         async function loadBaseModel() {
             const fill = document.getElementById('modelLoadFill');
             const titleEl = document.getElementById('modelLoadTitle');
@@ -1791,6 +1817,7 @@
         // ──────────────────────────────────────────────────────────────
         // CAMERA CAPTURE PER CLASS
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user switches feature extractor (MoveNet vs K230 YOLO), clearing old data
         async function changePoseExtractor(nextExtractor) {
             if (nextExtractor === FEATURE_EXTRACTOR) return;
             const select = document.getElementById('poseExtractorSelect');
@@ -1838,6 +1865,7 @@
                 : 'MoveNet selected — use the laptop webcam to collect poses.');
         }
 
+        // Runs when the user clicks Webcam to start capturing samples for a class
         async function openCamCapture(classIdx) {
             if (!moveNet) { setStatus('MoveNet not loaded yet.'); return; }
             if (camOpenIdx !== null) stopCamCapture();
@@ -1874,6 +1902,7 @@
         // for reliable body-keypoint detection. Training samples still come
         // from the regular Webcam button.
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user connects an ESP32-S3 camera to view it live over USB
         async function openEsp32CamCapture(classIdx) {
             if (!('serial' in navigator)) { alert('ESP32-S3 USB camera requires Chrome / Edge v89+ on desktop.'); return; }
             if (camOpenIdx !== null) stopCamCapture();
@@ -1900,6 +1929,7 @@
             }
         }
 
+        // Asks the ESP32-S3 camera to send one new snapshot image
         function esp32RequestFrame() {
             if (camSourceType !== 'esp32' || esp32Busy || !esp32Writer) return;
             esp32Busy = true;
@@ -1914,6 +1944,7 @@
             });
         }
 
+        // Continuously reads serial data from the ESP32-S3 camera while connected
         async function esp32ReaderLoop() {
             const decoder = new TextDecoder();
             try {
@@ -1932,6 +1963,7 @@
             }
         }
 
+        // Splits incoming ESP32-S3 serial text into lines and processes each one
         function esp32HandleText(text) {
             esp32LineBuf += text.replace(/\r/g, '');
             let idx;
@@ -1942,6 +1974,7 @@
             }
         }
 
+        // Reads one line of the ESP32-S3 image protocol and updates capture state
         function esp32ProcessLine(line) {
             if (line.startsWith('SERIAL IMAGE_BEGIN')) {
                 esp32ImageActive = true; esp32ImageB64 = '';
@@ -1964,6 +1997,7 @@
             }
         }
 
+        // Draws a decoded base64 JPEG snapshot from the ESP32-S3 onto the canvas
         function esp32RenderFrame(b64) {
             if (camSourceType !== 'esp32' || camOpenIdx === null) return;
             const canvas = document.getElementById(`cam-canvas-${camOpenIdx}`);
@@ -1981,6 +2015,7 @@
             img.src = 'data:image/jpeg;base64,' + b64;
         }
 
+        // Closes the serial connection to the ESP32-S3 camera and clears its state
         async function esp32Disconnect() {
             if (esp32CaptureTimer) { clearInterval(esp32CaptureTimer); esp32CaptureTimer = null; }
             if (esp32CaptureTimeout) { clearTimeout(esp32CaptureTimeout); esp32CaptureTimeout = null; }
@@ -1997,8 +2032,10 @@
         // ─────────────────────────────────────────────────────────────────────────────
         // K230 YOLO POSE CAMERA (exact on-device features over WebSerial)
         // ─────────────────────────────────────────────────────────────────────────────
+        // Pauses execution for the given number of milliseconds, used by K230 pose code
         function k230PoseDelay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+        // Runs when the user clicks to capture pose samples using the K230 camera
         async function openK230PoseCapture(classIdx) {
             if (FEATURE_EXTRACTOR !== 'k230-yolo') {
                 setStatus('Select “YOLOv8 Pose — K230 Camera” first.');
@@ -2034,6 +2071,7 @@
             await startK230PoseStream(classIdx, false);
         }
 
+        // Opens the WebSerial connection to the K230 board and starts its YOLO pose stream
         async function startK230PoseStream(classIdx = null, previewMode = false) {
             if (!SERIAL_SUPPORTED) {
                 alert('K230 YOLO camera requires Chrome or Edge with WebSerial support.');
@@ -2162,6 +2200,7 @@
             }
         }
 
+        // Continuously reads pose data from the K230 board over serial while streaming
         async function k230PoseReadLoop(activePort) {
             const decoder = new TextDecoder();
             const reader = activePort.readable.getReader();
@@ -2187,6 +2226,7 @@
             }
         }
 
+        // Reads one line from the K230 board and reacts based on its message type
         function k230PoseProcessLine(line) {
             if (line.includes('POSE_STREAM_READY')) {
                 setStatus(k230PosePreviewMode
@@ -2227,6 +2267,7 @@
             }
         }
 
+        // Decodes a base64 camera image from the K230 board and shows it on screen
         function loadK230PoseCameraFrame(b64) {
             if (!b64 || !k230PoseRunning) return;
             try {
@@ -2249,6 +2290,7 @@
             } catch (error) { console.warn('Bad K230 camera frame:', error); }
         }
 
+        // Draws the K230 camera image and detected pose skeleton onto the canvas
         function drawK230PoseFrame(payload = null) {
             const canvas = k230PosePreviewMode
                 ? document.getElementById('previewCanvas')
@@ -2285,6 +2327,7 @@
             }
         }
 
+        // Runs the trained model on a K230 pose sample during live preview, then shows the result
         async function classifyK230PosePreview(payload) {
             if (k230PoseInferBusy || !livePreviewActive || !classifier) return;
             k230PoseInferBusy = true;
@@ -2300,6 +2343,7 @@
             } finally { k230PoseInferBusy = false; }
         }
 
+        // Stops the K230 YOLO pose stream and closes its serial connection
         async function stopK230PoseStream(updateUi = true) {
             const activePort = k230PosePort;
             if (activePort) lastK230PosePort = activePort;
@@ -2338,6 +2382,7 @@
             }
         }
 
+        // Redraws the webcam video and pose skeleton onto the canvas every frame
         async function animateCamCanvas(classIdx) {
             const canvas = document.getElementById(`cam-canvas-${classIdx}`);
             if (!canvas || camOpenIdx !== classIdx) return;
@@ -2360,6 +2405,7 @@
         }
 
         let _poseLoopRunning = false;
+        // Repeatedly runs MoveNet on the webcam feed to keep the live skeleton updated
         async function startPoseLoop() {
             if (_poseLoopRunning) return;
             _poseLoopRunning = true;
@@ -2373,6 +2419,7 @@
             _poseLoopRunning = false;
         }
 
+        // Runs when the user closes the camera, stopping any active capture source
         function stopCamCapture() {
             clearInterval(holdTimer); holdTimer = null;
             if (camAnimFrame) { cancelAnimationFrame(camAnimFrame); camAnimFrame = null; }
@@ -2384,14 +2431,17 @@
             setStatus('Camera stopped.');
         }
 
+        // Runs when the user holds down the capture button, repeatedly saving samples
         function startHoldRecord(classIdx) {
             captureOneSample(classIdx);
             holdTimer = setInterval(() => captureOneSample(classIdx), 400);
         }
+        // Runs when the user releases the capture button, stopping repeated sample saving
         function stopHoldRecord() {
             clearInterval(holdTimer); holdTimer = null;
         }
 
+        // Saves the current K230 board pose reading as a training sample for a class
         function captureK230PoseSample(classIdx) {
             if (camSourceType !== 'k230-yolo' || camOpenIdx !== classIdx) return;
             if (!k230PoseLatest) {
@@ -2431,6 +2481,7 @@
             setStatus(`✓ K230 YOLO sample ${count} for “${cls.name}” (${payload.exact ? 'exact' : 'estimated'} hips)`);
         }
 
+        // Captures a single pose sample from the webcam (or K230) and adds it to the dataset
         async function captureOneSample(classIdx) {
             if (camSourceType === 'k230-yolo') {
                 captureK230PoseSample(classIdx);
@@ -2527,8 +2578,10 @@
         // ──────────────────────────────────────────────────────────────
         // RENDER
         // ──────────────────────────────────────────────────────────────
+        // Redraws the whole class list, stats, and output bars, used after any data change
         function render() { renderClasses(); renderStats(); initOutputBars(); }
 
+        // Rebuilds the HTML for every pose class card in the class list
         function renderClasses() {
             const container = document.getElementById('classList');
             container.innerHTML = '';
@@ -2668,6 +2721,7 @@
             });
         }
 
+        // Updates the sample-count list shown in the stats sidebar
         function renderStats() {
             document.getElementById('statsList').innerHTML = classes.map(cls => `
         <div class="stat-row">
@@ -2680,6 +2734,7 @@
         // ──────────────────────────────────────────────────────────────
         // CLASS MANAGEMENT
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user clicks Add Class, creating a new empty pose class
         function addClass() {
             const id = nextClassId++;
             const cls = { id, name: `Pose${id}`, color: colorForId(id) };
@@ -2692,6 +2747,7 @@
             render();
         }
 
+        // Runs when the user removes a pose class, deleting its samples and thumbnails too
         function removeClass(idx) {
             if (classes.length <= 2) { alert('Need at least 2 classes'); return; }
             const cls = classes[idx];
@@ -2723,6 +2779,7 @@
             render();
         }
 
+        // Runs when the user edits a class name text box, updating labels everywhere
         function renameClass(idx, newName) {
             const cls = classes[idx];
             const oldName = cls.name;
@@ -2739,6 +2796,7 @@
         // ──────────────────────────────────────────────────────────────
         // OUTPUT BARS
         // ──────────────────────────────────────────────────────────────
+        // Builds the empty prediction bar for each class, shown before live testing starts
         function initOutputBars() {
             document.getElementById('outputBars').innerHTML = classes.map((cls, i) => `
         <div class="output-row" id="output-row-${i}">
@@ -2754,6 +2812,7 @@
         </div>`).join('');
         }
 
+        // Fills in each class's prediction bar with its live confidence score
         function updateOutputBars(scores) {
             const best = scores.reduce((a, b) => a.score > b.score ? a : b);
             const isAbove = best.score >= THRESHOLD;
@@ -2775,6 +2834,7 @@
             updateDetectStatus(best, isAbove);
         }
 
+        // Shows the top predicted pose and confidence in the detection status banner
         function updateDetectStatus(best, isDetected) {
             const el = document.getElementById('detectStatus');
             const pct = (best.score * 100).toFixed(1);
@@ -2805,6 +2865,7 @@
             }
         }
 
+        // Clears the detection status banner back to "Not Detected"
         function resetDetectStatus() {
             const el = document.getElementById('detectStatus');
             el.style.background = '#fafafa'; el.style.borderBottom = '1px solid #f1f5f9';
@@ -2823,14 +2884,17 @@
         // ──────────────────────────────────────────────────────────────
         // TRAIN  — builds a dense classifier on top of MoveNet keypoints
         // ──────────────────────────────────────────────────────────────
+        // Shows the given HTML in the training status box
         function setTrainState(html) { document.getElementById('trainStateBox').innerHTML = html; }
 
+        // Splits samples into training and validation sets, keeping each class balanced
         function buildPoseStratifiedSplit(samples, numClasses, validationFraction = 0.1) {
             const byClass = Array.from({ length: numClasses }, () => []);
             samples.forEach((sample, index) => {
                 if (sample.label >= 0 && sample.label < numClasses) byClass[sample.label].push(index);
             });
 
+            // Randomly shuffles an array of indices in place
             const shuffleInPlace = values => {
                 for (let i = values.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -2858,6 +2922,7 @@
             return { trainIndices, validationIndices };
         }
 
+        // Runs when the user clicks Train, building and fitting the pose classifier model
         async function trainModel() {
             if (FEATURE_EXTRACTOR === 'movenet' && !moveNet) { alert('MoveNet not loaded yet.'); return; }
             const minSamples = Math.min(...classes.map(c => classCounts[c.name] || 0));
@@ -2868,6 +2933,7 @@
             document.getElementById('trainBtn').disabled = true;
             trained = false; updateButtons();
 
+            // Updates the training progress bar and status text
             const showProgress = (pct, msg) => {
                 setTrainState(`<div class="state-progress">
             <div class="progress-pct">${pct}%</div>
@@ -2975,6 +3041,7 @@
             }
         }
 
+        // Runs when the user clicks Retrain, clearing the old model to start fresh
         function resetTrain() {
             trained = false; classNamesCopy = []; updateButtons();
             if (classifier) { classifier.dispose(); classifier = null; }
@@ -2998,6 +3065,7 @@
         let _drawFrameId = null;
         let _poseTimerId = null;
 
+        // Runs when the user clicks Test/Start, opening the camera and beginning live detection
         async function startLivePreview() {
             if (livePreviewActive) return;
             if (!trained || !classifier) { alert('Train the model first!'); return; }
@@ -3043,6 +3111,7 @@
             }
         }
 
+        // Redraws the live preview video, skeleton, and prediction label every animation frame
         function _drawLoop() {
             if (!livePreviewActive) { _drawFrameId = null; return; }
             _drawFrameId = requestAnimationFrame(_drawLoop);
@@ -3078,6 +3147,7 @@
             }
         }
 
+        // Repeatedly runs the trained classifier on the live camera to predict the current pose
         async function _startPoseInferLoop() {
             while (livePreviewActive) {
                 try {
@@ -3106,6 +3176,7 @@
             }
         }
 
+        // Runs when the user clicks Stop, ending live preview and releasing the camera
         function stopLivePreview() {
             if (k230PoseRunning && k230PosePreviewMode) stopK230PoseStream(false);
             livePreviewActive = false;
@@ -3132,6 +3203,7 @@
         // ──────────────────────────────────────────────────────────────
         // RESET K230 / PAGE
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user clicks Reset K230, sending a reboot command to the board over USB
         async function resetK230PoseBoard() {
             if (!SERIAL_SUPPORTED) { alert('Reset K230 requires desktop Chrome or Edge with WebSerial.'); return; }
             if (connected || document.querySelector('#deployK230Btn .spinner')) {
@@ -3183,6 +3255,7 @@
             }
         }
 
+        // Runs when the user clicks Reset Page, clearing all classes, samples, and the model
         function resetPage() {
             if (!confirm('Reset everything? This clears all samples and the model.')) return;
             stopLivePreview(); stopCamCapture();
@@ -3205,6 +3278,7 @@
         // ──────────────────────────────────────────────────────────────
         // DEPLOY TO BLOCKLY
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user clicks Deploy, sending the trained pose classes back to Blockly
         function deployToBlockly() {
             if (!trained) { alert('Train first!'); return; }
             const classNames = classes.map(c => c.name);
@@ -3231,6 +3305,7 @@
         // ──────────────────────────────────────────────────────────────
         // DEPLOY TO K230
         // ──────────────────────────────────────────────────────────────
+        // Checks that the trained model's output size still matches the current class list
         function classifierMatchesClasses() {
             // Last-line defense against deploying a stale model: the softmax
             // layer must have exactly one unit per current class.
@@ -3240,6 +3315,7 @@
             } catch (_) { return false; }
         }
 
+        // Runs when the user clicks Deploy to K230, sending the trained model to the board
         async function deployToK230() {
             if (!trained || !classifier) { alert('Train first!'); return; }
             if (!classifierMatchesClasses()) {
@@ -3383,6 +3459,7 @@
         // ──────────────────────────────────────────────────────────────
         // EXPORT
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user clicks Export, downloading the compiled model as a .kmodel file
         async function exportKmodel() {
             if (!trained || !classifier) { alert('Train first!'); return; }
             if (!classifierMatchesClasses()) {
@@ -3444,6 +3521,7 @@
         // ──────────────────────────────────────────────────────────────
         // NAVIGATION
         // ──────────────────────────────────────────────────────────────
+        // Runs when the user clicks Back, closing this trainer and returning to the workspace
         function goBack() {
             stopLivePreview(); stopCamCapture();
             const payload = JSON.stringify({ type: 'CLOSE_POSE_TRAIN' });
