@@ -19,6 +19,9 @@
     <!-- JSZip for export/deploy -->
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
+    <script src="config.js"></script>
+
+
     <style>
         * {
             box-sizing: border-box;
@@ -1401,15 +1404,30 @@
         // CONFIG
         // ──────────────────────────────────────────────────────────────
         // Figures out which backend server address to use for model conversion
+        // const CONVERT_SERVER = (() => {
+        //     const origin = window.location.origin;
+        //     const isCloudflare = origin && origin.includes('trycloudflare.com');
+        //     const isWindowsAgent = origin && origin.includes('localhost:5001');
+        //     if (isCloudflare || isWindowsAgent) {
+        //         return origin;
+        //     }
+        //     return 'http://127.0.0.1:5001';
+        // })();
+
         const CONVERT_SERVER = (() => {
-            const origin = window.location.origin;
-            const isCloudflare = origin && origin.includes('trycloudflare.com');
-            const isWindowsAgent = origin && origin.includes('localhost:5001');
-            if (isCloudflare || isWindowsAgent) {
-                return origin;
-            }
-            return 'http://127.0.0.1:5001';
-        })();
+    if (window.ENV && typeof window.ENV.getBackendUrl === 'function') {
+        return window.ENV.getBackendUrl();
+    }
+    const origin = window.location.origin;
+    const isCloudflare = origin && origin.includes('trycloudflare.com');
+    const isWindowsAgent = origin && origin.includes('localhost:5001');
+    if (isCloudflare || isWindowsAgent) {
+        return origin;
+    }
+    return 'http://127.0.0.1:5001';
+})();
+
+
         const CHUNK_BYTES = 192;
         const SERIAL_SUPPORTED = 'serial' in navigator;
         const NUM_KEYPOINTS = 21;   // MediaPipe Hands standard

@@ -11,6 +11,10 @@
     <script
         src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.10.0/dist/tf-backend-wasm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    
+    <!-- added config.js -->
+     <script src="config.js"></script>
+
     <style>
         * {
             box-sizing: border-box;
@@ -1878,13 +1882,21 @@
         
          */
 
+        // function _detectBackendUrl() {
+        //     const origin = window.location.origin;
+        //     if (origin.includes('trycloudflare.com') || origin.includes('localhost:5001')) {
+        //         return origin; // served via tunnel or windows_agent — use as-is
+        //     }
+        //     return 'http://localhost:5001'; // fallback for local dev / Expo WebView
+        // }
+
         function _detectBackendUrl() {
-            const origin = window.location.origin;
-            if (origin.includes('trycloudflare.com') || origin.includes('localhost:5001')) {
-                return origin; // served via tunnel or windows_agent — use as-is
-            }
-            return 'http://localhost:5001'; // fallback for local dev / Expo WebView
-        }
+    if (window.ENV && typeof window.ENV.getBackendUrl === 'function') {
+        return window.ENV.getBackendUrl();
+    }
+    return 'http://localhost:5001';
+}
+
 
         const CONVERT_SERVER = _detectBackendUrl();
 

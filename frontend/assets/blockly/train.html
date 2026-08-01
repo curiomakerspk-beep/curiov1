@@ -6,6 +6,8 @@
     <title>Model Training — MobileNet V3</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="config.js"></script>
+
     <style>
       * {
         box-sizing: border-box;
@@ -1784,14 +1786,36 @@
        * Uses port 5001 by default so requests connect to the local Python training server.
        */
 
+      // function   () {
+      //   const input = document.getElementById("backendUrlInput");
+      //   let url =
+      //     input?.value?.trim() ||
+      //     `http://${window.location.hostname || "127.0.0.1"}:5001`;
+      //   if (url.endsWith("/")) url = url.slice(0, -1);
+      //   return url;
+      // }
+
       function getBackendUrl() {
-        const input = document.getElementById("backendUrlInput");
-        let url =
-          input?.value?.trim() ||
-          `http://${window.location.hostname || "127.0.0.1"}:5001`;
-        if (url.endsWith("/")) url = url.slice(0, -1);
-        return url;
-      }
+    const input = document.getElementById("backendUrlInput");
+    if (input && input.value && input.value.trim() !== "") {
+        return input.value.trim();
+    }
+    if (window.ENV && typeof window.ENV.getBackendUrl === 'function') {
+        return window.ENV.getBackendUrl();
+    }
+    return "https://cm-convert-backend-347233988269.us-central1.run.app";
+}
+
+// Automatically populates the text box on page load from config.js
+window.addEventListener('DOMContentLoaded', () => {
+    const inputEl = document.getElementById('backendUrlInput');
+    if (inputEl && window.ENV) {
+        inputEl.value = window.ENV.getBackendUrl();
+    }
+});
+
+
+
       /**
        * Gets a user-friendly error message from a failed backend HTTP response.
        * Reads JSON error details if present or returns standard HTTP status text.
